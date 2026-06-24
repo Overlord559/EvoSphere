@@ -1,5 +1,11 @@
+import type { AgentSnapshot } from '../../types/agents'
 import type { LifeSnapshot, SpeciesRecord } from '../../types/life'
-import type { BriefingSnapshot, DeepTimeSummary, EventLogEntry, SelectedSpeciesBriefing } from '../../types/runtime'
+import type {
+  BriefingSnapshot,
+  DeepTimeSummary,
+  EventLogEntry,
+  SelectedSpeciesBriefing,
+} from '../../types/runtime'
 import { threatStatus } from '../species/speciesOccupancy'
 import {
   eraForTick,
@@ -10,6 +16,7 @@ import {
 export function buildBriefing(
   tick: number,
   life: LifeSnapshot,
+  agents: AgentSnapshot,
   events: EventLogEntry[],
   lastDeepTimeSummary: DeepTimeSummary | null,
   speciesPopHistory: Map<string, number>,
@@ -34,19 +41,47 @@ export function buildBriefing(
     'life.colonization',
     'life.population_shift',
     'world.deep_time_summary',
+    'agent.spawned',
+    'agent.migrated',
+    'agent.grazed',
+    'agent.predation',
+    'agent.starved',
+    'agent.reproduced',
+    'agent.local_extinction',
+    'foodweb.prey_collapse',
+    'foodweb.predator_starvation',
+    'foodweb.population_cycle',
   ])
   const latestMajor = events.find((e) => majorTypes.has(e.type))
+  const foodWebEvent = events.find((e) =>
+    e.type.startsWith('foodweb.') || e.type.startsWith('agent.predation') || e.type.startsWith('agent.migrated'),
+  )
 
   const selectedSpecies = selectedSpeciesId
     ? buildSelectedSpeciesBriefing(selectedSpeciesId, life, speciesPopHistory)
     : null
 
+  const dominantGrazer = life.species.find((s) => s.id === agents.dominantGrazerSpeciesId)
+  const dominantPredator = life.species.find((s) => s.id === agents.dominantPredatorSpeciesId)
+
+  let predatorPreyTrend: string | null = null
+  if (agents.grazerCount > 0 || agents.predatorCount > 0) {
+    predatorPreyTrend = `${agents.grazerCount} grazers · ${agents.predatorCount} predators · ${agents.scavengerCount} scavengers`
+  }
+
+  let foodWebWarning: string | null = null
+  if (agents.predatorCount >= 3 && agents.grazerCount < 4) {
+    foodWebWarning = 'Prey collapse risk — predators may starve'
+  } else if (agents.grazerCount >= 10 && agents.predatorCount === 0) {
+    foodWebWarning = 'Ungulate bloom — no predation pressure'
+  }
+
   return {
     simulatedYear: tickToYears(tick),
     estimatedGenerations: tickToGenerations(tick),
-    era: eraForTick(tick, hasPlants, hasAlgae),
-    totalOrganisms: life.totalOrganisms,
-    totalBiomass: life.totalBiomass,
+    era: eraForTick(tick, hasPlants, hasAlgae, agents.totalAgents > 0),
+    totalOrganisms: life.totalOrganisms + agents.totalAgents,
+    totalBiomass: life.totalBiomass + agents.totalBiomass,
     speciesCount: aliveSpecies.length,
     dominantKind,
     dominantSpeciesName: dominant?.name ?? null,
@@ -55,6 +90,11 @@ export function buildBriefing(
     latestMajorEvent: latestMajor?.message ?? null,
     latestDeepTimeSummary: lastDeepTimeSummary,
     selectedSpecies,
+    dominantGrazerSpecies: dominantGrazer?.name ?? null,
+    dominantPredatorSpecies: dominantPredator?.name ?? null,
+    predatorPreyTrend,
+    foodWebWarning,
+    recentFoodWebEvent: foodWebEvent?.message ?? null,
   }
 }
 
@@ -69,10 +109,18 @@ function buildSelectedSpeciesBriefing(
   const occupancy = life.speciesOccupancy[speciesId]
   const prevPop = speciesPopHistory.get(speciesId) ?? record.population
 
+  const predatorNames = record.predatorSpeciesIds
+    .map((id) => life.species.find((s) => s.id === id)?.name)
+    .filter(Boolean) as string[]
+  const preyNames = record.preySpeciesIds
+    .map((id) => life.species.find((s) => s.id === id)?.name)
+    .filter(Boolean) as string[]
+
   return {
     speciesId,
     name: record.name,
     kind: record.kind,
+    trophicRole: record.trophicRole,
     population: record.population,
     biomass: record.totalBiomass,
     occupiedTiles: occupancy?.occupiedTileCount ?? 0,
@@ -82,6 +130,8 @@ function buildSelectedSpeciesBriefing(
     dominantTerrain: occupancy?.dominantTerrain?.replace(/_/g, ' ') ?? null,
     trend: threatStatus(record, prevPop),
     popDelta: record.population - prevPop,
+    predatorLinks: predatorNames,
+    preyLinks: preyNames,
   }
 }
 

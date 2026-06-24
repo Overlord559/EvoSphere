@@ -1,2 +1,7 @@
-/** Behavior — scheduled for v0.3 */
-export const BEHAVIOR_PHASE = 'v0.3' as const
+/** Mobile agent behavior — v0.4 */
+export {
+  chooseAgentGoal,
+  pickMoveTarget,
+  stepTowardTarget,
+  terrainMovementCost,
+} from './mobileBehavior'

@@ -1,2 +1,5 @@
-/** Agent systems — scheduled for v0.2 */
-export const AGENTS_PHASE = 'v0.2' as const
+/** Agent systems — v0.4 mobile agents + predation + food webs */
+export { AgentSystem, agentsOnTile, topAgentSpeciesOnTile } from './AgentSystem'
+export type { AgentEventEmitter } from './AgentSystem'
+export * from './AgentTypes'
+export * from './createAgent'

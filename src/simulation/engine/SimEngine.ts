@@ -6,6 +6,7 @@ import type {
   World,
 } from '../../types/simulation'
 import type { DeepTimeSummary } from '../../types/runtime'
+import { AgentSystem } from '../agents/AgentSystem'
 import { LifeSystem } from '../life/LifeSystem'
 import { generateWorld } from '../world/generateWorld'
 import { buildBriefing } from './briefing'
@@ -17,8 +18,11 @@ const DEEP_TIME_CHUNK_SIZE = 5000
 /** How often the UI receives a snapshot during deep-time (ms). */
 const DEEP_TIME_UI_SYNC_MS = 120
 
+const NOOP_EMIT = (): void => {}
+
 export interface DeepTimeCapture {
   startSnap: ReturnType<LifeSystem['getSnapshot']>
+  startAgents: ReturnType<AgentSystem['getSnapshot']>
   startTileCounts: number[]
   startColonized: number
   startDominant: string | null
@@ -30,6 +34,8 @@ export interface DeepTimeCapture {
   selectedSpeciesName: string | null
   selectedSpeciesPopBefore: number | null
   runtimeStartMs: number
+  startGrazers: number
+  startPredators: number
 }
 
 export class SimEngine {
@@ -38,6 +44,7 @@ export class SimEngine {
   private settings: SimulationSettings
   private readonly events: EventLogEntry[] = []
   private readonly life: LifeSystem
+  private readonly agents: AgentSystem
   private lastDeepTimeSummary: DeepTimeSummary | null = null
   private speciesPopBeforeStep = new Map<string, number>()
   private deepTimeMode = false
@@ -46,11 +53,13 @@ export class SimEngine {
     this.settings = { ...settings }
     this.world = generateWorld(this.settings)
     this.life = new LifeSystem(this.settings.seed, this.world)
+    this.agents = new AgentSystem(this.settings.seed, this.world, this.life)
     this.emitEvent(
       'world.generated',
       `World generated from seed "${this.settings.seed}" (${this.settings.worldWidth}×${this.settings.worldHeight})`,
     )
     this.life.seedInitialLife(this.world, (type, message) => this.emitEvent(type, message))
+    this.agents.seedInitialAgents(this.world, (type, message) => this.emitEvent(type, message))
     this.captureSpeciesPopBefore()
   }
 
@@ -59,13 +68,15 @@ export class SimEngine {
       this.tick += 1
       this.world.tick = this.tick
       this.life.tick(this.world, this.tick, (type, message) => this.emitEvent(type, message), suppressMinorEvents)
+      this.agents.tick(this.world, this.tick, (type, message) => this.emitEvent(type, message), suppressMinorEvents)
 
       if (!this.deepTimeMode && this.tick % TICK_EVENT_INTERVAL === 0) {
         const lifeSnap = this.life.getSnapshot(false)
+        const agentSnap = this.agents.getSnapshot(false)
         const aliveSpecies = lifeSnap.species.filter((s) => s.population > 0).length
         this.emitEvent(
           'world.tick',
-          `Tick ${this.tick} (~${tickToYears(this.tick)} yr) — ${lifeSnap.totalOrganisms} organisms, ${lifeSnap.totalBiomass.toFixed(1)} biomass, ${aliveSpecies} species`,
+          `Tick ${this.tick} (~${tickToYears(this.tick)} yr) — ${lifeSnap.totalOrganisms} organisms, ${agentSnap.totalAgents} mobile agents, ${lifeSnap.totalBiomass.toFixed(1)} biomass, ${aliveSpecies} species`,
         )
       }
     }
@@ -75,20 +86,29 @@ export class SimEngine {
   /** Fast batched stepping for deep-time — skips periodic world.tick events. */
   stepDeepTimeBatch(tickCount: number): void {
     this.deepTimeMode = true
-    this.tick = this.life.tickBatch(this.world, this.tick, tickCount)
-    this.world.tick = this.tick
+    this.agents.resetDeepStats()
+    let t = this.tick
+    for (let i = 0; i < tickCount; i++) {
+      t += 1
+      this.world.tick = t
+      this.life.tick(this.world, t, NOOP_EMIT, true)
+      this.agents.tick(this.world, t, NOOP_EMIT, true)
+    }
+    this.tick = t
     this.deepTimeMode = false
     this.captureSpeciesPopBefore()
   }
 
   startDeepTimeCapture(selectedSpeciesId: string | null = null): DeepTimeCapture {
-    const startSnap = this.life.getSnapshot(false)
+    const startSnap = this.life.getSnapshot(false, this.world, this.agents.getSnapshot(false).agents)
+    const startAgents = this.agents.getSnapshot(false)
     const selectedRecord = selectedSpeciesId
       ? startSnap.species.find((s) => s.id === selectedSpeciesId)
       : undefined
 
     return {
       startSnap,
+      startAgents,
       startTileCounts: [...startSnap.tileCounts],
       startColonized: this.life.getColonizedTileCount(),
       startDominant: startSnap.species.find((s) => s.population > 0)?.name ?? null,
@@ -104,15 +124,19 @@ export class SimEngine {
       selectedSpeciesName: selectedRecord?.name ?? null,
       selectedSpeciesPopBefore: selectedRecord?.population ?? null,
       runtimeStartMs: performance.now(),
+      startGrazers: startAgents.grazerCount,
+      startPredators: startAgents.predatorCount,
     }
   }
 
   finalizeDeepTime(capture: DeepTimeCapture): DeepTimeSummary {
-    const endSnap = this.life.getSnapshot(false)
+    const endSnap = this.life.getSnapshot(false, this.world, this.agents.getSnapshot(false).agents)
+    const endAgents = this.agents.getSnapshot(false)
     const endColonized = this.life.getColonizedTileCount()
     const endDominant = endSnap.species.find((s) => s.population > 0)?.name ?? null
     const changedTiles = this.life.countChangedTiles(capture.startTileCounts)
     const runtimeSeconds = (performance.now() - capture.runtimeStartMs) / 1000
+    const deepStats = this.agents.getDeepStats()
 
     const extinctions: string[] = []
     const newSpecies: string[] = []
@@ -133,6 +157,15 @@ export class SimEngine {
       if (capture.selectedSpeciesPopBefore !== null) {
         selectedSpeciesPopDelta = selectedSpeciesPopAfter - capture.selectedSpeciesPopBefore
       }
+    }
+
+    const startDominantGrazer = capture.startAgents.dominantGrazerSpeciesId
+    const endDominantGrazer = endAgents.dominantGrazerSpeciesId
+    const startDominantPred = capture.startAgents.dominantPredatorSpeciesId
+    const endDominantPred = endAgents.dominantPredatorSpeciesId
+    let dominantTrophicShift: string | null = null
+    if (startDominantGrazer !== endDominantGrazer || startDominantPred !== endDominantPred) {
+      dominantTrophicShift = `grazer/predator dominance shifted`
     }
 
     const summary: DeepTimeSummary = {
@@ -168,11 +201,22 @@ export class SimEngine {
       selectedSpeciesPopBefore: capture.selectedSpeciesPopBefore,
       selectedSpeciesPopAfter,
       selectedSpeciesPopDelta,
+      startGrazers: capture.startGrazers,
+      endGrazers: endAgents.grazerCount,
+      grazerDelta: endAgents.grazerCount - capture.startGrazers,
+      startPredators: capture.startPredators,
+      endPredators: endAgents.predatorCount,
+      predatorDelta: endAgents.predatorCount - capture.startPredators,
+      predationCount: deepStats.predationCount,
+      starvationCount: deepStats.starvationCount,
+      localExtinctions: deepStats.localExtinctions,
+      dominantTrophicShift,
     }
 
     this.lastDeepTimeSummary = summary
     this.emitDeepTimeSummary(summary)
     this.life.clearRecentActivity()
+    this.agents.clearRecentActivity()
     return summary
   }
 
@@ -200,6 +244,7 @@ export class SimEngine {
     this.settings = { ...this.settings, ...overrides }
     this.world = generateWorld(this.settings)
     this.life.reset(this.world, (type, message) => this.emitEvent(type, message))
+    this.agents.reset(this.world, (type, message) => this.emitEvent(type, message))
     this.emitEvent(
       'world.reset',
       `World reset with seed "${this.settings.seed}" (${this.settings.worldWidth}×${this.settings.worldHeight})`,
@@ -220,35 +265,16 @@ export class SimEngine {
   }
 
   getRecentActivityTileIndices(): number[] {
-    return this.life.getRecentActivityTiles()
+    return [...new Set([...this.life.getRecentActivityTiles(), ...this.agents.getRecentActivityTiles()])]
   }
 
-  getSnapshot(includeOrganisms = true): SimulationSnapshot {
-    const life = this.life.getSnapshot(includeOrganisms)
+  private buildSnapshot(includeOrganisms: boolean, selectedSpeciesId: string | null): SimulationSnapshot {
+    const agentSnap = this.agents.getSnapshot(includeOrganisms)
+    const life = this.life.getSnapshot(includeOrganisms, this.world, agentSnap.agents)
     const briefing = buildBriefing(
       this.tick,
       life,
-      this.events,
-      this.lastDeepTimeSummary,
-      this.speciesPopBeforeStep,
-      null,
-    )
-    return {
-      tick: this.tick,
-      worldId: this.world.id,
-      world: this.world,
-      events: [...this.events],
-      life,
-      briefing,
-      lastDeepTimeSummary: this.lastDeepTimeSummary,
-    }
-  }
-
-  getSnapshotWithSelectedSpecies(selectedSpeciesId: string | null): SimulationSnapshot {
-    const life = this.life.getSnapshot(true)
-    const briefing = buildBriefing(
-      this.tick,
-      life,
+      agentSnap,
       this.events,
       this.lastDeepTimeSummary,
       this.speciesPopBeforeStep,
@@ -260,13 +286,26 @@ export class SimEngine {
       world: this.world,
       events: [...this.events],
       life,
+      agents: agentSnap,
       briefing,
       lastDeepTimeSummary: this.lastDeepTimeSummary,
     }
   }
 
+  getSnapshot(includeOrganisms = true): SimulationSnapshot {
+    return this.buildSnapshot(includeOrganisms, null)
+  }
+
+  getSnapshotWithSelectedSpecies(selectedSpeciesId: string | null): SimulationSnapshot {
+    return this.buildSnapshot(true, selectedSpeciesId)
+  }
+
   private captureSpeciesPopBefore(): void {
-    this.speciesPopBeforeStep = this.life.getSpeciesPopHistory()
+    const map = new Map<string, number>()
+    for (const species of this.life.getRegistry().getAll()) {
+      map.set(species.id, species.population)
+    }
+    this.speciesPopBeforeStep = map
   }
 
   private emitDeepTimeSummary(summary: DeepTimeSummary): void {
@@ -274,10 +313,14 @@ export class SimEngine {
       `${summary.startYear} → ${summary.endYear} yr (${summary.elapsedSimYears} yr elapsed)`,
       `${summary.runtimeSeconds.toFixed(1)}s runtime`,
       `organisms ${summary.startOrganisms} → ${summary.endOrganisms} (${summary.organismDelta >= 0 ? '+' : ''}${summary.organismDelta})`,
+      `grazers ${summary.startGrazers} → ${summary.endGrazers}`,
+      `predators ${summary.startPredators} → ${summary.endPredators}`,
       `species ${summary.startSpecies} → ${summary.endSpecies}`,
       `${summary.colonizedTilesDelta >= 0 ? '+' : ''}${summary.colonizedTilesDelta} colonized tiles`,
       `${summary.changedTilesCount} tiles changed`,
     ]
+    if (summary.predationCount > 0) parts.push(`${summary.predationCount} predations`)
+    if (summary.starvationCount > 0) parts.push(`${summary.starvationCount} starvations`)
     if (summary.majorBlooms > 0) parts.push('major bloom')
     if (summary.majorDieOffs > 0) parts.push('major die-off')
     if (summary.newSpecies.length > 0) {
@@ -289,6 +332,7 @@ export class SimEngine {
     if (summary.dominantSpeciesBefore !== summary.dominantSpeciesAfter) {
       parts.push(`dominant: ${summary.dominantSpeciesBefore ?? 'none'} → ${summary.dominantSpeciesAfter ?? 'none'}`)
     }
+    if (summary.dominantTrophicShift) parts.push(summary.dominantTrophicShift)
     if (summary.selectedSpeciesName && summary.selectedSpeciesPopDelta !== null) {
       parts.push(
         `${summary.selectedSpeciesName}: ${summary.selectedSpeciesPopBefore} → ${summary.selectedSpeciesPopAfter} (${summary.selectedSpeciesPopDelta >= 0 ? '+' : ''}${summary.selectedSpeciesPopDelta})`,

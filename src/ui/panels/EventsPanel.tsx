@@ -13,6 +13,16 @@ const EVENT_COLORS: Record<string, string> = {
   'world.generated': 'text-slate-500',
   'world.reset': 'text-slate-500',
   'world.tick': 'text-slate-600',
+  'agent.spawned': 'text-emerald-300',
+  'agent.migrated': 'text-cyan-400',
+  'agent.grazed': 'text-lime-400',
+  'agent.predation': 'text-red-400',
+  'agent.starved': 'text-orange-400',
+  'agent.reproduced': 'text-emerald-500',
+  'agent.local_extinction': 'text-red-500',
+  'foodweb.prey_collapse': 'text-red-400',
+  'foodweb.predator_starvation': 'text-orange-300',
+  'foodweb.population_cycle': 'text-amber-300',
 }
 
 export function EventsPanel() {

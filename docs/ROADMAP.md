@@ -33,7 +33,7 @@
 - [x] Life and biomass viewport overlays
 - [x] Biological event log
 
-## v0.3.2 Species Highlight + Performance ✅ (current)
+## v0.3.2 Species Highlight + Performance ✅
 
 - [x] `selectedSpeciesId` in Zustand — select / focus / clear
 - [x] Species panel clickable rows with summary stats
@@ -45,20 +45,32 @@
 - [x] Deep-time progress UI + runtime in summary
 - [x] ~5× faster +10K yr vs v0.3.1 sync benchmark (exact ticks preserved)
 
-## v0.4 Behavior + Ecology expansion (next)
+## v0.4 Mobile Agents + Predation + Food Webs ✅ (current)
 
-- [ ] Mobile agents with movement and local behavior
-- [ ] Predation and food webs
-- [ ] Expanded species interactions
-- [ ] Richer inspector and species lineage views
+- [x] Mobile agent kinds: SimpleGrazer, SimplePredator, Scavenger
+- [x] Mobile genome traits (speed, stamina, hunting, grazing, aggression, fearfulness, …)
+- [x] Deterministic movement, goals, and energy costs
+- [x] Herbivory — grazers consume producer biomass with overgrazing pressure
+- [x] Predation — predators hunt grazers/scavengers with energy transfer
+- [x] Food web links, trophic roles, predator/prey species panel integration
+- [x] Viewport mobile agent dots (green grazers, red predators, amber scavengers)
+- [x] Throttled agent + food-web milestone events
+- [x] Deep-time summary includes grazer/predator deltas, predation, starvation counts
 
-## v0.5 Society
+## v0.5 Body Plans + Senses + Environmental Selection (next)
+
+- [ ] Richer agent senses and body-plan variation
+- [ ] Stronger environmental selection pressure
+- [ ] Proto-behavior expansion depending on v0.4 outcomes
+- [ ] Culture / technology / civilization remain deferred
+
+## v0.6 Society (deferred)
 
 - [ ] Culture transmission (`simulation/culture`)
 - [ ] Technology discoveries (`simulation/technology`)
 - [ ] Settlements and civilization metrics (`simulation/civilization`)
 
-## v0.6 Persistence + Polish
+## v0.7 Persistence + Polish
 
 - [ ] IndexedDB snapshot storage via `idb`
 - [ ] Seed export / import
@@ -71,3 +83,4 @@
 - External AI narration or LLM-driven agents
 - 3D rendering
 - Hardcoded human endpoint species
+- Tools, medicine, computing, spaceflight (until v0.6+ scope review)

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Application, Container, Graphics } from 'pixi.js'
 import { useSimulationStore } from '../../store/simulationStore'
+import type { MobileAgent } from '../../types/agents'
 import type { OverlayMode, Tile, World } from '../../types/simulation'
 import { getTileAt } from '../../simulation/world'
 import { maxTileDensity } from '../../simulation/life/LifeSystem'
@@ -44,6 +45,8 @@ function drawWorld(
   tileBiomass: number[],
   activityTiles: number[],
   speciesTileIndices: number[] | null,
+  agents: MobileAgent[],
+  selectedSpeciesId: string | null,
 ): void {
   container.removeChildren()
 
@@ -84,6 +87,26 @@ function drawWorld(
     }
   }
 
+  const maxAgentsToDraw = 600
+  const agentsToDraw = agents.length > maxAgentsToDraw ? agents.slice(0, maxAgentsToDraw) : agents
+  for (const agent of agentsToDraw) {
+    const cx = agent.x * tileSize + tileSize / 2
+    const cy = agent.y * tileSize + tileSize / 2
+    const isSelectedSpecies = agent.speciesId === selectedSpeciesId
+    let color = 0x4ade80
+    if (agent.trophicRole === 'predator') color = 0xf87171
+    else if (agent.trophicRole === 'scavenger') color = 0xfbbf24
+
+    const dot = new Graphics()
+    const radius = isSelectedSpecies ? tileSize * 0.28 : tileSize * 0.2
+    dot.circle(cx, cy, radius)
+    dot.fill({ color, alpha: isSelectedSpecies ? 0.95 : 0.82 })
+    if (isSelectedSpecies) {
+      dot.stroke({ width: 1, color: 0xffffff, alpha: 0.7 })
+    }
+    container.addChild(dot)
+  }
+
   if (selectedTile) {
     const outline = new Graphics()
     outline.rect(
@@ -114,6 +137,7 @@ export function WorldViewport() {
 
   const world = snapshot.world
   const { tileCounts, tileBiomass, speciesOccupancy } = snapshot.life
+  const agents = snapshot.agents.agents
   const speciesTileIndices = selectedSpeciesId
     ? (speciesOccupancy[selectedSpeciesId]?.tileIndices ?? null)
     : null
@@ -220,6 +244,8 @@ export function WorldViewport() {
         current.selectedSpeciesId
           ? (current.snapshot.life.speciesOccupancy[current.selectedSpeciesId]?.tileIndices ?? null)
           : null,
+        current.snapshot.agents.agents,
+        current.selectedSpeciesId,
       )
       centerWorld(worldContainer, current.snapshot.world, host, viewportRef.current)
 
@@ -261,8 +287,10 @@ export function WorldViewport() {
       tileBiomass,
       recentActivityTiles,
       speciesTileIndices,
+      agents,
+      selectedSpeciesId,
     )
-  }, [world, overlayMode, selectedTile, tileCounts, tileBiomass, snapshot.tick, recentActivityTiles, speciesTileIndices])
+  }, [world, overlayMode, selectedTile, tileCounts, tileBiomass, snapshot.tick, recentActivityTiles, speciesTileIndices, agents, selectedSpeciesId])
 
   return (
     <div className="flex min-h-[320px] flex-1 flex-col rounded-lg border border-command-border bg-command-surface/60">
@@ -290,7 +318,7 @@ export function WorldViewport() {
         aria-label="World viewport"
       />
       <p className="border-t border-command-border px-3 py-2 font-mono text-xs text-slate-500">
-        Scroll to zoom · drag to pan · click tile to inspect · select species to highlight range on map
+        Scroll to zoom · drag to pan · click tile to inspect · green=grazer red=predator amber=scavenger dots
       </p>
     </div>
   )

@@ -28,8 +28,15 @@ export type SimEra =
   | 'Microbial'
   | 'Early Photosynthetic'
   | 'Primitive Plant Colonization'
+  | 'Mobile Ecology'
 
-export function eraForTick(tick: number, hasPlants: boolean, hasAlgae: boolean): SimEra {
+export function eraForTick(
+  tick: number,
+  hasPlants: boolean,
+  hasAlgae: boolean,
+  hasMobileAgents = false,
+): SimEra {
+  if (hasMobileAgents && tick >= 200) return 'Mobile Ecology'
   if (hasPlants && tick >= 500) return 'Primitive Plant Colonization'
   if (hasAlgae || tick >= 150) return 'Early Photosynthetic'
   return 'Microbial'

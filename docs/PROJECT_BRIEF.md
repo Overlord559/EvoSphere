@@ -22,41 +22,17 @@ Evolution and emergence are fascinating but hard to explore interactively. Most 
 4. **Browser-first** — no install, no backend, IndexedDB for persistence later
 5. **Honest scope** — no fake data, no dead controls, no spectacle without substance
 
-## v0.3.2 Species Highlight + Performance ✅ (current)
+## v0.4 Mobile Agents + Predation + Food Webs ✅ (current)
 
 Delivered:
 
-- Species selection state (`selectedSpeciesId`) with select / focus / clear
-- Map highlight for all tiles occupied by selected species
-- Species panel summary (population, biomass, tiles, avg stats, habitat, threat)
-- Inspector + Briefing cross-link for selected species
-- Precomputed species occupancy index in life snapshot
-- Deep-time performance: batched 5K ticks, O(1) tile counts, progress UI
-- Deep-time summary includes runtime seconds + selected species delta
+- SimpleGrazer, SimplePredator, Scavenger mobile agents with extended mobile genomes
+- Deterministic movement, herbivory, predation, reproduction, starvation, migration
+- Food web links and trophic roles in species registry + UI
+- Viewport agent dots and throttled food-web milestone events
+- Deep-time summaries include grazer/predator deltas and predation/starvation counts
 
-## v0.3.1 Runtime + Observability ✅
+## Success Criteria for v0.5
 
-Delivered:
-
-- Run/pause simulation loop with speed modes (1×–1000×)
-- Step 1 / 10 / 100 / 1,000 ticks
-- Deep time fast-forward (+1K / +10K / +100K / +1M years) with summary events
-- World briefing panel (era, dominant species, threats, deep-time recap)
-- Species clustering fix — shared founder lineages, gated speciation
-- Throttled milestone event log (blooms, die-offs, extinctions, colonization)
-- Improved life/biomass overlay visibility
-
-## v0.3 Life ✅
-
-Delivered:
-
-- Microbial energy loop and plant colonization on real tile data
-- Genome inheritance with deterministic mutation
-- Live species/biomass counts in UI
-- Life/biomass viewport overlays
-
-## Success Criteria for v0.4
-
-- Mobile agents with behavior and predation
-- Food web interactions between life kinds
-- No civilization or tool systems yet
+- Richer body plans, senses, and environmental selection
+- No culture, tools, or civilization yet

@@ -241,7 +241,16 @@ export class LifeSystem {
     return t
   }
 
-  getSnapshot(includeOrganisms = true): LifeSnapshot {
+  getSnapshot(
+    includeOrganisms = true,
+    world?: World,
+    agents: import('../../types/agents').MobileAgent[] = [],
+  ): LifeSnapshot {
+    let occupancy = this.speciesOccupancyCache
+    if (world && agents.length > 0) {
+      occupancy = buildSpeciesOccupancy(this.organisms, this.registry.getAll(), world, agents)
+    }
+
     return {
       organisms: includeOrganisms ? [...this.organisms] : [],
       species: this.registry.getAll(),
@@ -249,7 +258,7 @@ export class LifeSystem {
       totalBiomass: this.cachedTotalBiomass,
       tileCounts: [...this.tileCounts],
       tileBiomass: [...this.tileBiomass],
-      speciesOccupancy: this.speciesOccupancyCache,
+      speciesOccupancy: occupancy,
     }
   }
 
@@ -275,6 +284,53 @@ export class LifeSystem {
       if ((this.tileCounts[i] ?? 0) !== (previousCounts[i] ?? 0)) changed += 1
     }
     return changed
+  }
+
+  getRegistry(): SpeciesRegistry {
+    return this.registry
+  }
+
+  /** Consume producer biomass on a tile for herbivory — returns amount consumed. */
+  consumeBiomassAt(x: number, y: number, amount: number, world: World): number {
+    const onTile = this.organisms.filter((o) => o.x === x && o.y === y)
+    if (onTile.length === 0) return 0
+
+    let remaining = amount
+    let consumed = 0
+    const sorted = [...onTile].sort((a, b) => a.biomass - b.biomass)
+
+    for (const organism of sorted) {
+      if (remaining <= 0) break
+      const take = Math.min(remaining, organism.biomass * 0.4, 0.25)
+      if (take <= 0.01) continue
+      organism.biomass = Math.max(0.05, organism.biomass - take)
+      organism.energy = Math.max(0, organism.energy - take * 0.5)
+      if (organism.biomass < 0.08 || organism.energy <= 0.02) {
+        organism.health = 0
+      }
+      remaining -= take
+      consumed += take
+    }
+
+    if (consumed > 0) {
+      this.rebuildTileIndex(world)
+    }
+    return consumed
+  }
+
+  getTileBiomassArray(): number[] {
+    return this.tileBiomass
+  }
+
+  getPopulationMap(): Map<string, { count: number; biomass: number }> {
+    const popMap = new Map<string, { count: number; biomass: number }>()
+    for (const organism of this.organisms) {
+      const stats = popMap.get(organism.speciesId) ?? { count: 0, biomass: 0 }
+      stats.count += 1
+      stats.biomass += organism.biomass
+      popMap.set(organism.speciesId, stats)
+    }
+    return popMap
   }
 
   getTileLife(world: World, x: number, y: number): TileLifeData {

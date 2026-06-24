@@ -23,7 +23,7 @@ EvoSphere is a client-only single-page application. Simulation logic lives under
      ┌───────────────┼───────────────┐
      ▼               ▼               ▼
   world/         life/           agents/
-  (v0.2 live)    (v0.3 live)     (v0.4+)
+  (v0.2 live)    (v0.3 live)     (v0.4 live)
 ```
 
 ## Directory Layout
@@ -38,7 +38,9 @@ EvoSphere is a client-only single-page application. Simulation logic lives under
 | `src/simulation/engine/briefing.ts` | Live world briefing from simulation state |
 | `src/simulation/world/` | Deterministic terrain and climate generation |
 | `src/simulation/life/` | Organism tick orchestration |
-| `src/simulation/species/` | Species registry + speciation config |
+| `src/simulation/agents/` | Mobile agent tick orchestration (v0.4) |
+| `src/simulation/behavior/` | Mobile goal selection and movement |
+| `src/simulation/ecology/` | Energy, colonization, herbivory, predation, food web |
 | `src/ui/panels/` | Command-center side panels |
 | `src/ui/viewport/` | Pixi canvas host + tile color maps |
 
@@ -91,6 +93,38 @@ Deep-time buttons convert years → ticks via `yearsToTicks()`. Summaries report
 - `requestAnimationFrame` loop in store (not React render) drives continuous run at 1×–1000×
 - Deep time uses chunked stepping (`DEEP_TIME_CHUNK_SIZE = 250`) to avoid browser lockups
 - UI calls store actions only; viewport is read-only
+
+## SimEngine (v0.4)
+
+- Constructs `LifeSystem` + `AgentSystem` on init
+- Seeds founder life, then mobile agents on suitable tiles
+- `step()` runs life tick then agent tick each tick
+- `stepDeepTimeBatch()` runs both systems with events suppressed
+- `getSnapshot()` includes `life`, `agents`, and combined species occupancy
+- Deep-time summary includes grazer/predator deltas, predation count, starvation count
+
+## Agent System (v0.4)
+
+```
+AgentSystem
+  ├── agents[] — mobile entities (SimpleGrazer, SimplePredator, Scavenger)
+  ├── FoodWebTracker — predator/prey link counts
+  ├── tileAgentCounts[] — per-tile density for movement caps + viewport
+  └── tick() — hunger → goal → move/graze/hunt → death → reproduction
+```
+
+Population controls: max 3 agents/tile, max 800 globally.
+
+| Path | Role |
+|------|------|
+| `simulation/agents/AgentSystem.ts` | Tick orchestration + milestone events |
+| `simulation/agents/createAgent.ts` | Agent factories |
+| `simulation/genetics/agentGenome.ts` | Base mobile genomes |
+| `simulation/genetics/agentMutation.ts` | Offspring mutation + speciation gate |
+| `simulation/behavior/mobileBehavior.ts` | Goals, movement, flee, migration |
+| `simulation/ecology/herbivory.ts` | Grazing energy + terrain costs |
+| `simulation/ecology/predation.ts` | Hunt resolution |
+| `simulation/ecology/foodWeb.ts` | Predator/prey link tracking |
 
 ## SimEngine (v0.3.2)
 

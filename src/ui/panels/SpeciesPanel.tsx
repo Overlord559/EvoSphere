@@ -19,7 +19,7 @@ export function SpeciesPanel() {
     ? life.speciesOccupancy[selectedSpeciesId]
     : null
 
-  if (life.totalOrganisms === 0) {
+  if (life.totalOrganisms === 0 && snapshot.agents.totalAgents === 0) {
     return (
       <p className="text-sm text-slate-400">
         No living organisms yet. Step the simulation or generate a world with suitable
@@ -46,6 +46,7 @@ export function SpeciesPanel() {
           <p className="text-violet-300">SELECTED — {selectedRecord.name}</p>
           <dl className="mt-2 space-y-1">
             <Row label="Kind" value={lifeKindLabel(selectedRecord.kind)} />
+            <Row label="Trophic role" value={selectedRecord.trophicRole} />
             <Row label="Population" value={String(selectedRecord.population)} />
             <Row label="Biomass" value={selectedRecord.totalBiomass.toFixed(1)} />
             <Row label="Occupied tiles" value={String(selectedOccupancy?.occupiedTileCount ?? 0)} />
@@ -63,6 +64,26 @@ export function SpeciesPanel() {
                 selectedRecord.population - (popHistory.selectedSpecies?.popDelta ?? 0),
               )}
             />
+            {(selectedRecord.preySpeciesIds.length > 0 || selectedRecord.predatorSpeciesIds.length > 0) && (
+              <>
+                {selectedRecord.preySpeciesIds.length > 0 && (
+                  <Row
+                    label="Prey links"
+                    value={selectedRecord.preySpeciesIds
+                      .map((id) => life.species.find((s) => s.id === id)?.name ?? id.slice(0, 6))
+                      .join(', ')}
+                  />
+                )}
+                {selectedRecord.predatorSpeciesIds.length > 0 && (
+                  <Row
+                    label="Predator links"
+                    value={selectedRecord.predatorSpeciesIds
+                      .map((id) => life.species.find((s) => s.id === id)?.name ?? id.slice(0, 6))
+                      .join(', ')}
+                  />
+                )}
+              </>
+            )}
           </dl>
         </div>
       )}
@@ -100,7 +121,9 @@ export function SpeciesPanel() {
                       <span className="text-emerald-400">{species.population} pop</span>
                     </div>
                     <div className="mt-1 flex justify-between text-slate-400">
-                      <span>{lifeKindLabel(species.kind)}</span>
+                      <span>
+                        {lifeKindLabel(species.kind)} · {species.trophicRole}
+                      </span>
                       <span>{occupancy?.occupiedTileCount ?? 0} tiles</span>
                     </div>
                   </button>

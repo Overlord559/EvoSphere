@@ -1,4 +1,4 @@
-import type { LifeKind } from './life'
+import type { EntityKind } from './life'
 
 export interface DeepTimeSummary {
   startTick: number
@@ -32,6 +32,16 @@ export interface DeepTimeSummary {
   selectedSpeciesPopBefore: number | null
   selectedSpeciesPopAfter: number | null
   selectedSpeciesPopDelta: number | null
+  startGrazers: number
+  endGrazers: number
+  grazerDelta: number
+  startPredators: number
+  endPredators: number
+  predatorDelta: number
+  predationCount: number
+  starvationCount: number
+  localExtinctions: number
+  dominantTrophicShift: string | null
 }
 
 export interface BriefingSnapshot {
@@ -41,7 +51,7 @@ export interface BriefingSnapshot {
   totalOrganisms: number
   totalBiomass: number
   speciesCount: number
-  dominantKind: LifeKind | null
+  dominantKind: EntityKind | null
   dominantSpeciesName: string | null
   fastestGrowingSpecies: string | null
   mostThreatenedSpecies: string | null
@@ -49,12 +59,18 @@ export interface BriefingSnapshot {
   latestDeepTimeSummary: DeepTimeSummary | null
   /** Populated when a species is selected in UI. */
   selectedSpecies: SelectedSpeciesBriefing | null
+  dominantGrazerSpecies: string | null
+  dominantPredatorSpecies: string | null
+  predatorPreyTrend: string | null
+  foodWebWarning: string | null
+  recentFoodWebEvent: string | null
 }
 
 export interface SelectedSpeciesBriefing {
   speciesId: string
   name: string
-  kind: LifeKind
+  kind: import('./life').EntityKind
+  trophicRole: import('./agents').TrophicRole
   population: number
   biomass: number
   occupiedTiles: number
@@ -64,6 +80,8 @@ export interface SelectedSpeciesBriefing {
   dominantTerrain: string | null
   trend: 'growing' | 'stable' | 'threatened' | 'extinct'
   popDelta: number
+  predatorLinks: string[]
+  preyLinks: string[]
 }
 
 export interface SimulationSnapshot {
@@ -97,6 +115,16 @@ export type EventCategory =
   | 'world.generated'
   | 'world.reset'
   | 'world.tick'
+  | 'agent.spawned'
+  | 'agent.migrated'
+  | 'agent.grazed'
+  | 'agent.predation'
+  | 'agent.starved'
+  | 'agent.reproduced'
+  | 'agent.local_extinction'
+  | 'foodweb.prey_collapse'
+  | 'foodweb.predator_starvation'
+  | 'foodweb.population_cycle'
 
 export type SimSpeed = 1 | 10 | 100 | 1000 | 'deep'
 

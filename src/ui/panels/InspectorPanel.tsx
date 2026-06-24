@@ -1,5 +1,6 @@
 import { useSimulationStore } from '../../store/simulationStore'
 import { topSpeciesOnTile } from '../../simulation/life/LifeSystem'
+import { agentsOnTile, topAgentSpeciesOnTile } from '../../simulation/agents/AgentSystem'
 import { formatPercent, formatTemperature } from '../../simulation/world'
 import { lifeKindLabel, terrainLabel } from '../viewport/tileColors'
 
@@ -21,11 +22,15 @@ export function InspectorPanel() {
   const tileLife = snapshot.life.organisms.filter(
     (o) => o.x === selectedTile.x && o.y === selectedTile.y,
   )
+  const tileAgents = agentsOnTile(snapshot.agents.agents, selectedTile.x, selectedTile.y)
   const idx = selectedTile.y * snapshot.world.width + selectedTile.x
   const tileCount = snapshot.life.tileCounts[idx] ?? 0
   const tileBiomass = snapshot.life.tileBiomass[idx] ?? 0
+  const agentCount = snapshot.agents.tileAgentCounts[idx] ?? 0
   const topSpecies = topSpeciesOnTile(snapshot.life.organisms, selectedTile.x, selectedTile.y)
+  const topAgents = topAgentSpeciesOnTile(snapshot.agents.agents, selectedTile.x, selectedTile.y)
   const speciesNames = new Map(snapshot.life.species.map((s) => [s.id, s.name]))
+  const speciesRoles = new Map(snapshot.life.species.map((s) => [s.id, s.trophicRole]))
 
   return (
     <div className="space-y-4 text-sm text-slate-300">
@@ -51,20 +56,21 @@ export function InspectorPanel() {
 
       <div>
         <p className="mb-2 font-mono text-xs text-slate-500">LIFE ON TILE</p>
-        {tileCount === 0 ? (
+        {tileCount === 0 && agentCount === 0 ? (
           <p className="text-xs text-slate-400">No organisms on this tile.</p>
         ) : (
           <>
             <dl className="mb-2 space-y-1 font-mono text-xs">
-              <Row label="Organisms" value={String(tileCount)} />
+              <Row label="Producers" value={String(tileCount)} />
+              <Row label="Mobile agents" value={String(agentCount)} />
               <Row label="Biomass" value={tileBiomass.toFixed(2)} />
             </dl>
 
-            {topSpecies.length > 0 && (
+            {(topSpecies.length > 0 || topAgents.length > 0) && (
               <div className="mb-2">
                 <p className="mb-1 font-mono text-[10px] text-slate-500">TOP SPECIES — click to select</p>
                 <ul className="space-y-1 font-mono text-xs">
-                  {topSpecies.slice(0, 4).map(({ speciesId, kind, count }) => {
+                  {[...topSpecies, ...topAgents].slice(0, 5).map(({ speciesId, kind, count }) => {
                     const isSelected = speciesId === selectedSpeciesId
                     return (
                       <li key={speciesId}>
@@ -77,12 +83,42 @@ export function InspectorPanel() {
                               : 'border-command-border/60 text-slate-400 hover:border-command-accent/30'
                           }`}
                         >
-                          <span>{speciesNames.get(speciesId) ?? lifeKindLabel(kind)}</span>
+                          <span>
+                            {speciesNames.get(speciesId) ?? lifeKindLabel(kind)} ·{' '}
+                            {speciesRoles.get(speciesId) ?? '—'}
+                          </span>
                           <span>{count}</span>
                         </button>
                       </li>
                     )
                   })}
+                </ul>
+              </div>
+            )}
+
+            {tileAgents.length > 0 && (
+              <div className="mb-2">
+                <p className="mb-1 font-mono text-[10px] text-slate-500">MOBILE AGENTS</p>
+                <ul className="max-h-32 space-y-1 overflow-y-auto font-mono text-xs text-slate-400">
+                  {tileAgents.map((agent) => (
+                    <li
+                      key={agent.id}
+                      className={`rounded border px-2 py-1 ${
+                        agent.speciesId === selectedSpeciesId
+                          ? 'border-violet-400/40 bg-violet-500/10'
+                          : 'border-command-border/60'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        className="w-full text-left"
+                        onClick={() => selectSpecies(agent.speciesId)}
+                      >
+                        {lifeKindLabel(agent.kind)} · {agent.trophicRole} · goal {agent.currentGoal} · E{' '}
+                        {agent.energy.toFixed(2)} · H {agent.health.toFixed(2)}
+                      </button>
+                    </li>
+                  ))}
                 </ul>
               </div>
             )}
@@ -97,7 +133,7 @@ export function InspectorPanel() {
                       : 'border-command-border/60'
                   }`}
                 >
-                  {lifeKindLabel(organism.kind)} · E {organism.energy.toFixed(2)} · H{' '}
+                  {lifeKindLabel(organism.kind)} · producer · E {organism.energy.toFixed(2)} · H{' '}
                   {organism.health.toFixed(2)} · age {organism.age}
                 </li>
               ))}

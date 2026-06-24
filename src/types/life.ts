@@ -1,9 +1,14 @@
+import type { AgentKind, TrophicRole } from './agents'
+
 export type LifeKind =
   | 'Microbe'
   | 'PhotosyntheticMicrobe'
   | 'ChemosyntheticMicrobe'
   | 'Algae'
   | 'PrimitivePlant'
+
+/** Producer + mobile agent archetypes tracked in species registry. */
+export type EntityKind = LifeKind | AgentKind
 
 export type EnergySource = 'photosynthesis' | 'chemosynthesis' | 'mixed'
 
@@ -43,7 +48,8 @@ export interface LifeOrganism {
 export interface SpeciesRecord {
   id: string
   name: string
-  kind: LifeKind
+  kind: EntityKind
+  trophicRole: TrophicRole
   ancestorSpeciesId: string | null
   createdAtTick: number
   population: number
@@ -51,6 +57,11 @@ export interface SpeciesRecord {
   generation: number
   /** True for shared archetype founder lineages seeded at world init. */
   isFounderLineage?: boolean
+  /** Species ids this species preys on (food web). */
+  preySpeciesIds: string[]
+  /** Species ids that prey on this species. */
+  predatorSpeciesIds: string[]
+  isMobile: boolean
 }
 
 export interface TileLifeData {

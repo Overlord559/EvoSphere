@@ -1,3 +1,4 @@
+import type { MobileAgent } from '../../types/agents'
 import type { LifeKind, LifeOrganism, SpeciesOccupancy, SpeciesRecord } from '../../types/life'
 import type { TerrainType, World } from '../../types/simulation'
 
@@ -5,6 +6,7 @@ export function buildSpeciesOccupancy(
   organisms: LifeOrganism[],
   species: SpeciesRecord[],
   world: World,
+  agents: MobileAgent[] = [],
 ): Record<string, SpeciesOccupancy> {
   const bySpecies = new Map<
     string,
@@ -34,6 +36,30 @@ export function buildSpeciesOccupancy(
     entry.generationSum += organism.generation
     entry.energySum += organism.energy
     entry.healthSum += organism.health
+
+    const tile = world.tiles[idx]
+    if (tile) {
+      entry.terrainCounts.set(tile.terrain, (entry.terrainCounts.get(tile.terrain) ?? 0) + 1)
+    }
+  }
+
+  for (const agent of agents) {
+    const idx = agent.y * world.width + agent.x
+    let entry = bySpecies.get(agent.speciesId)
+    if (!entry) {
+      entry = {
+        tileSet: new Set(),
+        generationSum: 0,
+        energySum: 0,
+        healthSum: 0,
+        terrainCounts: new Map(),
+      }
+      bySpecies.set(agent.speciesId, entry)
+    }
+    entry.tileSet.add(idx)
+    entry.generationSum += agent.generation
+    entry.energySum += agent.energy
+    entry.healthSum += agent.health
 
     const tile = world.tiles[idx]
     if (tile) {
@@ -82,6 +108,6 @@ export function threatStatus(
   return 'stable'
 }
 
-export function kindLabel(kind: LifeKind): string {
+export function kindLabel(kind: LifeKind | import('../../types/agents').AgentKind): string {
   return kind.replace(/([A-Z])/g, ' $1').trim()
 }

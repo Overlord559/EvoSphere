@@ -1,3 +1,4 @@
+import type { AgentSnapshot } from './agents'
 import type { LifeSnapshot } from './life'
 import type { BriefingSnapshot, DeepTimeSummary } from './runtime'
 
@@ -52,6 +53,7 @@ export interface SimulationSnapshot {
   world: World
   events: EventLogEntry[]
   life: LifeSnapshot
+  agents: AgentSnapshot
   briefing: BriefingSnapshot
   lastDeepTimeSummary: DeepTimeSummary | null
 }

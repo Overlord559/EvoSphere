@@ -83,7 +83,7 @@ const initialEngine = createEngine(DEFAULT_SETTINGS)
 
 export const useSimulationStore = create<SimulationStore>((set, get) => ({
   activePanel: 'world',
-  phase: 'v0.3.2 highlight',
+  phase: 'v0.4 agents',
   overlayMode: 'terrain',
   selectedTile: null,
   selectedSpeciesId: null,

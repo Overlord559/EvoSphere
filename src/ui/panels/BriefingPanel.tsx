@@ -14,7 +14,9 @@ export function BriefingPanel() {
         <div className="rounded border border-violet-500/30 bg-violet-500/10 p-3">
           <p className="font-mono text-xs text-violet-300">SELECTED SPECIES BRIEFING</p>
           <p className="mt-2 font-mono text-lg text-slate-100">{selected.name}</p>
-          <p className="font-mono text-xs text-slate-400">{lifeKindLabel(selected.kind)} · {selected.trend}</p>
+          <p className="font-mono text-xs text-slate-400">
+            {lifeKindLabel(selected.kind)} · {selected.trophicRole} · {selected.trend}
+          </p>
           <dl className="mt-3 space-y-1.5 font-mono text-xs">
             <Row label="Population" value={String(selected.population)} />
             <Row label="Biomass" value={selected.biomass.toFixed(1)} />
@@ -27,6 +29,12 @@ export function BriefingPanel() {
               label="Recent trend"
               value={`${selected.popDelta >= 0 ? '+' : ''}${selected.popDelta} pop`}
             />
+            {selected.preyLinks.length > 0 && (
+              <Row label="Prey" value={selected.preyLinks.join(', ')} />
+            )}
+            {selected.predatorLinks.length > 0 && (
+              <Row label="Predators" value={selected.predatorLinks.join(', ')} />
+            )}
           </dl>
         </div>
       ) : (
@@ -54,7 +62,25 @@ export function BriefingPanel() {
           <Row label="Dominant species" value={briefing.dominantSpeciesName ?? '—'} />
           <Row label="Fastest growing" value={briefing.fastestGrowingSpecies ?? '—'} />
           <Row label="Most threatened" value={briefing.mostThreatenedSpecies ?? '—'} />
+          <Row label="Dominant grazer" value={briefing.dominantGrazerSpecies ?? '—'} />
+          <Row label="Dominant predator" value={briefing.dominantPredatorSpecies ?? '—'} />
+          <Row label="Food web" value={briefing.predatorPreyTrend ?? '—'} />
         </dl>
+      )}
+
+      {briefing.foodWebWarning && (
+        <div className="rounded border border-red-500/30 bg-red-500/10 p-2 font-mono text-xs text-red-300">
+          {briefing.foodWebWarning}
+        </div>
+      )}
+
+      {briefing.recentFoodWebEvent && (
+        <div>
+          <p className="mb-1 font-mono text-xs text-slate-500">RECENT FOOD WEB EVENT</p>
+          <p className="rounded border border-command-border bg-command-bg/60 p-2 font-mono text-xs text-slate-300">
+            {briefing.recentFoodWebEvent}
+          </p>
+        </div>
       )}
 
       {briefing.latestMajorEvent && (
@@ -99,6 +125,22 @@ export function BriefingPanel() {
                 label={deep.selectedSpeciesName}
                 value={`${deep.selectedSpeciesPopBefore} → ${deep.selectedSpeciesPopAfter} (${deep.selectedSpeciesPopDelta >= 0 ? '+' : ''}${deep.selectedSpeciesPopDelta})`}
               />
+            )}
+            <Row
+              label="Grazers"
+              value={`${deep.startGrazers} → ${deep.endGrazers} (${deep.grazerDelta >= 0 ? '+' : ''}${deep.grazerDelta})`}
+            />
+            <Row
+              label="Predators"
+              value={`${deep.startPredators} → ${deep.endPredators} (${deep.predatorDelta >= 0 ? '+' : ''}${deep.predatorDelta})`}
+            />
+            {deep.predationCount > 0 && <Row label="Predations" value={String(deep.predationCount)} />}
+            {deep.starvationCount > 0 && <Row label="Starvations" value={String(deep.starvationCount)} />}
+            {deep.localExtinctions > 0 && (
+              <Row label="Local extinctions" value={String(deep.localExtinctions)} />
+            )}
+            {deep.dominantTrophicShift && (
+              <Row label="Trophic shift" value={deep.dominantTrophicShift} />
             )}
             {deep.newSpecies.length > 0 && (
               <Row label="New species" value={deep.newSpecies.slice(0, 3).join(', ')} />
