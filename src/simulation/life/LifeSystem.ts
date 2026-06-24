@@ -24,8 +24,13 @@ import { mutateGenome, shouldSpeciate } from '../genetics/mutation'
 import { getTileAt } from '../world/generateWorld'
 import { createFounderOrganism, createOrganism } from './createLife'
 import { SpeciesRegistry, resetSpeciesCounter } from '../species/speciesRegistry'
+import { DEFAULT_SPECIATION_CONFIG } from '../species/speciationConfig'
 
 export type LifeEventEmitter = (type: string, message: string) => void
+
+const BLOOM_THRESHOLD = 40
+const DIE_OFF_THRESHOLD = 20
+const BIOMASS_SWING_RATIO = 0.35
 
 export class LifeSystem {
   private organisms: LifeOrganism[] = []
@@ -34,8 +39,15 @@ export class LifeSystem {
   private tileBiomass: number[] = []
   private readonly seed: string
   private tickRng: Rng
-  private reproductionMilestone = 0
   private lastPopulation = 0
+  private lastBiomass = 0
+  private lastDominantSpeciesId: string | null = null
+  private firstReproductionLogged = false
+  private colonizedTiles = new Set<number>()
+  private speciesPopHistory = new Map<string, number>()
+  private bloomCooldown = 0
+  private dieOffCooldown = 0
+  private recentActivityTiles = new Set<number>()
 
   constructor(seed: string, world: World) {
     this.seed = seed
@@ -96,19 +108,26 @@ export class LifeSystem {
     }
 
     this.rebuildTileIndex(world)
+    this.trackColonizedTiles(world)
     if (this.organisms.length > 0) {
+      const speciesCount = this.registry.getAll().filter((s) => s.population > 0).length
       emit(
         'life.first',
-        `First life seeded: ${this.organisms.length} founder organisms across chemosynthetic, photosynthetic, algal, and plant archetypes`,
+        `First life seeded: ${this.organisms.length} founder organisms across ${speciesCount} founder species lineages`,
       )
     }
     this.lastPopulation = this.organisms.length
+    this.lastBiomass = this.computeTotalBiomass()
+    this.lastDominantSpeciesId = this.registry.getDominant()?.id ?? null
+    this.captureSpeciesPopulations()
   }
 
-  tick(world: World, tick: number, emit: LifeEventEmitter): void {
+  tick(world: World, tick: number, emit: LifeEventEmitter, suppressMinorEvents = false): void {
     this.tickRng = forkRng(this.seed, `life-tick-${tick}`)
     const deaths: string[] = []
     const births: LifeOrganism[] = []
+    const prePopulation = this.organisms.length
+    const preSpeciesIds = new Set(this.registry.getAll().filter((s) => s.population > 0).map((s) => s.id))
 
     for (const organism of this.organisms) {
       const tile = getTileAt(world, organism.x, organism.y)
@@ -142,11 +161,13 @@ export class LifeSystem {
         organism.reproductionCooldown <= 0 &&
         this.organisms.length + births.length < MAX_TOTAL_ORGANISMS
       ) {
-        const child = this.tryReproduce(organism, world, tick, emit)
+        const child = this.tryReproduce(organism, world, tick, emit, suppressMinorEvents)
         if (child) {
           births.push(child)
           organism.energy -= REPRODUCTION_ENERGY_COST
           organism.reproductionCooldown = Math.round(18 / Math.max(0.12, organism.genome.reproductionRate))
+          const tileIdx = child.y * world.width + child.x
+          this.recentActivityTiles.add(tileIdx)
         }
       }
     }
@@ -158,37 +179,55 @@ export class LifeSystem {
 
     this.organisms.push(...births)
     this.rebuildTileIndex(world)
+    this.trackColonizedTiles(world)
 
-    if (births.length > 0) {
-      this.reproductionMilestone += births.length
-      if (this.reproductionMilestone === births.length || this.reproductionMilestone % 25 === 0) {
+    if (births.length > 0 && !suppressMinorEvents) {
+      if (!this.firstReproductionLogged) {
+        this.firstReproductionLogged = true
         emit(
           'life.reproduce',
-          `Reproduction milestone: ${births.length} births this tick (total population ${this.organisms.length})`,
+          `First reproduction: ${births.length} offspring born (population ${this.organisms.length})`,
         )
       }
     }
 
-    const populationDrop = this.lastPopulation - this.organisms.length
-    if (populationDrop >= 20 && this.lastPopulation > 30) {
-      emit('life.die_off', `Die-off: ${populationDrop} organisms lost (population now ${this.organisms.length})`)
-    }
-    this.lastPopulation = this.organisms.length
+    this.detectPopulationEvents(world, tick, emit, prePopulation, preSpeciesIds, suppressMinorEvents)
+    this.captureSpeciesPopulations()
   }
 
   getSnapshot(): LifeSnapshot {
-    let totalBiomass = 0
-    for (const organism of this.organisms) {
-      totalBiomass += organism.biomass
-    }
     return {
       organisms: [...this.organisms],
       species: this.registry.getAll(),
       totalOrganisms: this.organisms.length,
-      totalBiomass,
+      totalBiomass: this.computeTotalBiomass(),
       tileCounts: [...this.tileCounts],
       tileBiomass: [...this.tileBiomass],
     }
+  }
+
+  getSpeciesPopHistory(): Map<string, number> {
+    return new Map(this.speciesPopHistory)
+  }
+
+  getColonizedTileCount(): number {
+    return this.colonizedTiles.size
+  }
+
+  getRecentActivityTiles(): number[] {
+    return [...this.recentActivityTiles]
+  }
+
+  clearRecentActivity(): void {
+    this.recentActivityTiles.clear()
+  }
+
+  countChangedTiles(previousCounts: number[]): number {
+    let changed = 0
+    for (let i = 0; i < this.tileCounts.length; i++) {
+      if ((this.tileCounts[i] ?? 0) !== (previousCounts[i] ?? 0)) changed += 1
+    }
+    return changed
   }
 
   getTileLife(world: World, x: number, y: number): TileLifeData {
@@ -206,10 +245,25 @@ export class LifeSystem {
     this.registry.clear()
     resetSpeciesCounter()
     this.tickRng = forkRng(this.seed, 'life')
-    this.reproductionMilestone = 0
     this.lastPopulation = 0
+    this.lastBiomass = 0
+    this.lastDominantSpeciesId = null
+    this.firstReproductionLogged = false
+    this.colonizedTiles.clear()
+    this.speciesPopHistory.clear()
+    this.bloomCooldown = 0
+    this.dieOffCooldown = 0
+    this.recentActivityTiles.clear()
     this.initTileArrays(world)
     this.seedInitialLife(world, emit)
+  }
+
+  private computeTotalBiomass(): number {
+    let total = 0
+    for (const organism of this.organisms) {
+      total += organism.biomass
+    }
+    return total
   }
 
   private initTileArrays(world: World): void {
@@ -223,7 +277,7 @@ export class LifeSystem {
     if (this.organisms.length >= MAX_TOTAL_ORGANISMS) return
 
     const founder = createFounderOrganism(kind, '', x, y)
-    const species = this.registry.register(kind, founder.genome, tick)
+    const species = this.registry.getOrCreateFounderSpecies(kind, founder.genome, tick)
     founder.speciesId = species.id
     this.organisms.push(founder)
   }
@@ -237,6 +291,7 @@ export class LifeSystem {
     world: World,
     tick: number,
     emit: LifeEventEmitter,
+    suppressMinorEvents: boolean,
   ): LifeOrganism | null {
     if (this.tickRng() > parent.genome.reproductionRate * parent.genome.spreadRate + 0.15) {
       return null
@@ -264,35 +319,53 @@ export class LifeSystem {
     const pick = candidates[Math.floor(this.tickRng() * candidates.length)]
     const childGenome = mutateGenome(parent.genome, forkRng(this.seed, `mut-${parent.id}-${tick}`))
     let speciesId = parent.speciesId
+    const childGeneration = parent.generation + 1
+    const parentPop = this.registry.getPopulation(parent.speciesId)
 
-    if (shouldSpeciate(parent.genome, childGenome)) {
+    if (
+      shouldSpeciate(
+        parent.genome,
+        childGenome,
+        childGeneration,
+        parentPop,
+        DEFAULT_SPECIATION_CONFIG,
+      )
+    ) {
       const existing = this.registry.findByGenome(parent.kind, childGenome)
       if (existing) {
         speciesId = existing.id
       } else {
-        const species = this.registry.register(
+        const species = this.registry.registerBranch(
           parent.kind,
           childGenome,
           tick,
           parent.speciesId,
-          parent.generation + 1,
+          childGeneration,
         )
         speciesId = species.id
+        if (!suppressMinorEvents) {
+          emit(
+            'life.speciation',
+            `New species "${species.name}" diverged from ${parent.kind} (gen ${childGeneration}, pop ${parentPop})`,
+          )
+        }
+      }
+    }
+
+    const wasEmpty = this.countAtTile(pick.x, pick.y) === 0
+    const child = createOrganism(parent.kind, speciesId, pick.x, pick.y, childGenome, childGeneration)
+
+    if (wasEmpty && !suppressMinorEvents) {
+      const tile = getTileAt(world, pick.x, pick.y)
+      if (tile) {
         emit(
-          'life.speciation',
-          `New species "${species.name}" diverged from parent lineage (${parent.kind})`,
+          'life.colonization',
+          `${parent.kind} colonized ${tile.terrain.replace(/_/g, ' ')} at (${pick.x}, ${pick.y})`,
         )
       }
     }
 
-    return createOrganism(
-      parent.kind,
-      speciesId,
-      pick.x,
-      pick.y,
-      childGenome,
-      parent.generation + 1,
-    )
+    return child
   }
 
   private rebuildTileIndex(world: World): void {
@@ -312,6 +385,101 @@ export class LifeSystem {
 
     this.registry.updateCounts(popMap)
   }
+
+  private trackColonizedTiles(world: World): void {
+    for (const organism of this.organisms) {
+      this.colonizedTiles.add(organism.y * world.width + organism.x)
+    }
+  }
+
+  private captureSpeciesPopulations(): void {
+    for (const species of this.registry.getAll()) {
+      this.speciesPopHistory.set(species.id, species.population)
+    }
+  }
+
+  private detectPopulationEvents(
+    _world: World,
+    _tick: number,
+    emit: LifeEventEmitter,
+    prePopulation: number,
+    preSpeciesIds: Set<string>,
+    suppressMinorEvents: boolean,
+  ): void {
+    const population = this.organisms.length
+    const biomass = this.computeTotalBiomass()
+    const populationDelta = population - this.lastPopulation
+    const biomassDelta = biomass - this.lastBiomass
+
+    if (!suppressMinorEvents) {
+      if (
+        populationDelta >= BLOOM_THRESHOLD &&
+        this.bloomCooldown <= 0 &&
+        population > prePopulation
+      ) {
+        emit(
+          'life.bloom',
+          `Population bloom: +${populationDelta} organisms (now ${population}, biomass ${biomass.toFixed(1)})`,
+        )
+        this.bloomCooldown = 15
+      } else if (this.bloomCooldown > 0) {
+        this.bloomCooldown -= 1
+      }
+
+      const populationDrop = this.lastPopulation - population
+      if (
+        populationDrop >= DIE_OFF_THRESHOLD &&
+        this.lastPopulation > 30 &&
+        this.dieOffCooldown <= 0
+      ) {
+        emit(
+          'life.die_off',
+          `Die-off: −${populationDrop} organisms (population now ${population})`,
+        )
+        this.dieOffCooldown = 15
+      } else if (this.dieOffCooldown > 0) {
+        this.dieOffCooldown -= 1
+      }
+
+      if (
+        this.lastBiomass > 0 &&
+        Math.abs(biomassDelta) / this.lastBiomass >= BIOMASS_SWING_RATIO &&
+        Math.abs(biomassDelta) > 5
+      ) {
+        const direction = biomassDelta > 0 ? 'surge' : 'collapse'
+        emit(
+          'life.bloom',
+          `Biomass ${direction}: ${biomassDelta > 0 ? '+' : ''}${biomassDelta.toFixed(1)} (total ${biomass.toFixed(1)})`,
+        )
+      }
+    }
+
+    for (const species of this.registry.getAll()) {
+      if (species.population === 0 && preSpeciesIds.has(species.id) && !species.isFounderLineage) {
+        if (!suppressMinorEvents) {
+          emit('life.extinction', `Extinction: "${species.name}" (${species.kind}) — population reached zero`)
+        }
+      }
+    }
+
+    const dominant = this.registry.getDominant()
+    if (
+      dominant &&
+      this.lastDominantSpeciesId &&
+      dominant.id !== this.lastDominantSpeciesId &&
+      !suppressMinorEvents
+    ) {
+      const prev = this.registry.get(this.lastDominantSpeciesId)
+      emit(
+        'life.population_shift',
+        `Dominant species shift: ${prev?.name ?? 'unknown'} → ${dominant.name} (${dominant.population} organisms)`,
+      )
+    }
+
+    this.lastPopulation = population
+    this.lastBiomass = biomass
+    this.lastDominantSpeciesId = dominant?.id ?? null
+  }
 }
 
 export function tileIndex(x: number, y: number, width: number): number {
@@ -324,4 +492,21 @@ export function maxTileDensity(tileCounts: number[]): number {
     if (count > max) max = count
   }
   return max
+}
+
+export function topSpeciesOnTile(
+  organisms: LifeOrganism[],
+  x: number,
+  y: number,
+): { speciesId: string; kind: LifeKind; count: number }[] {
+  const onTile = organisms.filter((o) => o.x === x && o.y === y)
+  const counts = new Map<string, { kind: LifeKind; count: number }>()
+  for (const o of onTile) {
+    const entry = counts.get(o.speciesId) ?? { kind: o.kind, count: 0 }
+    entry.count += 1
+    counts.set(o.speciesId, entry)
+  }
+  return [...counts.entries()]
+    .map(([speciesId, { kind, count }]) => ({ speciesId, kind, count }))
+    .sort((a, b) => b.count - a.count)
 }

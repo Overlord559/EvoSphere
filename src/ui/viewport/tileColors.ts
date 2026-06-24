@@ -56,6 +56,7 @@ export interface TileColorContext {
   tileBiomass?: number[]
   maxTileCount?: number
   maxTileBiomass?: number
+  activityTiles?: Set<number>
 }
 
 export function colorForTile(
@@ -120,33 +121,35 @@ export function colorForTile(
       const base = colorForTerrain(tile.terrain)
       const count = context?.tileCounts?.[context.tileIndex] ?? 0
       const max = Math.max(1, context?.maxTileCount ?? 1)
-      const density = count / max
-      if (density <= 0) return base
+      const density = Math.min(1, count / max)
+      if (count <= 0) return base
       const lifeColor = gradientColor(
         [
-          [20, 30, 40],
+          [15, 45, 25],
           [34, 197, 94],
-          [190, 242, 100],
+          [134, 239, 172],
+          [250, 250, 210],
         ],
-        density,
+        Math.pow(density, 0.65),
       )
-      return blendColors(base, lifeColor, 0.55 + density * 0.35)
+      return blendColors(base, lifeColor, 0.65 + density * 0.3)
     }
     case 'biomass': {
       const base = colorForTerrain(tile.terrain)
       const biomass = context?.tileBiomass?.[context.tileIndex] ?? 0
       const max = Math.max(0.01, context?.maxTileBiomass ?? 1)
       const density = Math.min(1, biomass / max)
-      if (density <= 0) return base
+      if (biomass <= 0) return base
       const biomassColor = gradientColor(
         [
-          [30, 40, 30],
+          [20, 35, 20],
           [74, 222, 128],
-          [250, 204, 21],
+          [163, 230, 53],
+          [253, 224, 71],
         ],
-        density,
+        Math.pow(density, 0.55),
       )
-      return blendColors(base, biomassColor, 0.5 + density * 0.4)
+      return blendColors(base, biomassColor, 0.6 + density * 0.38)
     }
   }
 }

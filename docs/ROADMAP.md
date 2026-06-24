@@ -20,7 +20,7 @@
 - [x] Wire viewport and panels to simulation snapshots
 - [x] Tile selection and inspector panel
 
-## v0.3 Life ✅ (current)
+## v0.3 Life ✅
 
 - [x] Life entity types: Microbe, PhotosyntheticMicrobe, ChemosyntheticMicrobe, Algae, PrimitivePlant
 - [x] Genome with reproduction, mutation, tolerance, and efficiency traits
@@ -33,13 +33,24 @@
 - [x] Life and biomass viewport overlays
 - [x] Biological event log
 
-### Intentionally not in v0.3
+## v0.3.1 Runtime + Observability ✅ (current)
+
+- [x] Run / pause / step controls (1, 10, 100, 1,000 ticks)
+- [x] Speed modes: 1×, 10×, 100×, 1,000×
+- [x] Deep time fast-forward (+1K / +10K / +100K / +1M years)
+- [x] Simulated time abstraction (tick, generation estimate, years)
+- [x] Deep time summary events (population, biomass, species, colonization deltas)
+- [x] World briefing panel with era and live developments
+- [x] Species clustering fix (shared founder species, gated speciation)
+- [x] Throttled milestone events (no reproduction spam)
+- [x] Improved life/biomass overlay visibility + activity highlights
+
+### Intentionally not in v0.3.1
 
 - Animals and predators
 - Tools, culture, civilization, spiritual systems
 - Medicine, computing, spaceflight
 - IndexedDB persistence
-- Multi-cell body plans beyond primitive plants
 
 ## v0.4 Behavior + Ecology expansion (next)
 

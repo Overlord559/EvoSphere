@@ -1,6 +1,8 @@
 import type { LifeSnapshot } from './life'
+import type { BriefingSnapshot, DeepTimeSummary } from './runtime'
 
 export type { LifeSnapshot } from './life'
+export type { BriefingSnapshot, DeepTimeSummary, RuntimeState, SimSpeed } from './runtime'
 
 export type TerrainType =
   | 'deep_ocean'
@@ -50,6 +52,8 @@ export interface SimulationSnapshot {
   world: World
   events: EventLogEntry[]
   life: LifeSnapshot
+  briefing: BriefingSnapshot
+  lastDeepTimeSummary: DeepTimeSummary | null
 }
 
 export interface EventLogEntry {

@@ -2,19 +2,27 @@
 
 Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, and real-time Pixi viewport rendering.
 
-**Current phase:** v0.3 life
+**Current phase:** v0.3.1 runtime + observability
 
 ## Status
 
-v0.3 adds deterministic life systems on top of the v0.2 planetary substrate:
+v0.3.1 adds simulation runtime controls, deep-time fast-forward, and observability on top of v0.3 life systems:
+
+- **Run / Pause / Step** — 1, 10, 100, 1,000 tick steps with reliable engine-owned loop
+- **Speed modes** — 1×, 10×, 100×, 1,000× continuous run
+- **Deep time** — +1K / +10K / +100K / +1M year jumps with summary events
+- **World briefing** — era, dominant species, threats, blooms, deep-time recap
+- **Species clustering fix** — founder lineages share species; speciation requires divergence + generations + population
+- Life and biomass overlays with activity highlights
+
+v0.3 foundation:
 
 - Microbial energy loop (photosynthetic and chemosynthetic)
 - Algae and primitive plant colonization
 - Genome inheritance with mutation and speciation
 - Live species counts, biomass, and biological event log
-- Life and biomass viewport overlays
 
-Animals, predators, tools, culture, and civilization remain deferred.
+Animals, predators, tools, culture, and civilization remain deferred to v0.4+.
 
 ## Stack
 
@@ -34,9 +42,11 @@ npm run build
 npm run lint
 ```
 
-## Life simulation (v0.3)
+## Simulation time
 
-Organisms gain energy from tile environment (light, water, chemicals, fertility), pay metabolism costs, suffer environmental stress, reproduce into suitable neighboring tiles, mutate, and die. Per-tile carrying capacity and a global organism cap prevent runaway growth.
+- **Tick** — atomic simulation step (life energy, reproduction, death)
+- **Generation estimate** — ~25 ticks per generation (approximate)
+- **Simulated years** — 10 ticks ≈ 1 year (tunable abstraction for deep-time jumps)
 
 Same world seed produces the same founder placement. Life tick RNG uses `forkRng(seed, 'life-tick-N')`.
 

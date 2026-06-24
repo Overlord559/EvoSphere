@@ -22,26 +22,19 @@ Evolution and emergence are fascinating but hard to explore interactively. Most 
 4. **Browser-first** — no install, no backend, IndexedDB for persistence later
 5. **Honest scope** — no fake data, no dead controls, no spectacle without substance
 
-## v0.1 Foundation (current)
+## v0.3.1 Runtime + Observability ✅ (current)
 
-Delivered in this phase:
+Delivered:
 
-- Vite + React + TypeScript scaffold
-- Shared simulation types (`TerrainType`, `Tile`, `World`, etc.)
-- Folder structure for all major systems
-- Deterministic RNG utility (`seedrandom`)
-- `SimEngine` placeholder
-- Dark command-center landing shell with panel navigation
-- Documentation (this file, architecture, roadmap)
+- Run/pause simulation loop with speed modes (1×–1000×)
+- Step 1 / 10 / 100 / 1,000 ticks
+- Deep time fast-forward (+1K / +10K / +100K / +1M years) with summary events
+- World briefing panel (era, dominant species, threats, deep-time recap)
+- Species clustering fix — shared founder lineages, gated speciation
+- Throttled milestone event log (blooms, die-offs, extinctions, colonization)
+- Improved life/biomass overlay visibility
 
-Not in v0.1:
-
-- World generation
-- Pixi viewport rendering
-- Agent ticks
-- Persistence
-
-## v0.3 Life ✅ (current)
+## v0.3 Life ✅
 
 Delivered:
 

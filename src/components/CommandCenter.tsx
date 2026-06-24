@@ -38,8 +38,8 @@ export function CommandCenter() {
 
       <footer className="border-t border-command-border px-6 py-3">
         <p className="font-mono text-xs text-slate-500">
-          v0.3 — life systems active. Step ticks to grow populations. Animals and society
-          modules begin in later phases.
+          v0.3.1 — simulation runtime, deep time, and observability. Run/pause, step ticks, fast-forward
+          years, and watch life spread via Life/Biomass overlays. v0.4 adds mobile agents and predation.
         </p>
       </footer>
     </div>

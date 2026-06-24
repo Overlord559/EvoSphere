@@ -5,6 +5,8 @@ export function SpeciesPanel() {
   const life = useSimulationStore((s) => s.snapshot.life)
   const tick = useSimulationStore((s) => s.snapshot.tick)
 
+  const aliveSpecies = life.species.filter((s) => s.population > 0)
+
   if (life.totalOrganisms === 0) {
     return (
       <p className="text-sm text-slate-400">
@@ -20,20 +22,20 @@ export function SpeciesPanel() {
         <Row label="Tick" value={String(tick)} />
         <Row label="Total organisms" value={String(life.totalOrganisms)} />
         <Row label="Total biomass" value={life.totalBiomass.toFixed(1)} />
-        <Row label="Species count" value={String(life.species.length)} />
+        <Row label="Species count (alive)" value={String(aliveSpecies.length)} />
       </dl>
 
       <div>
-        <p className="mb-2 font-mono text-xs text-slate-500">SPECIES REGISTRY</p>
+        <p className="mb-2 font-mono text-xs text-slate-500">SPECIES REGISTRY (by population)</p>
         <ul className="max-h-64 space-y-2 overflow-y-auto">
-          {life.species.map((species) => (
+          {aliveSpecies.map((species) => (
             <li
               key={species.id}
               className="rounded border border-command-border bg-command-bg/60 p-2 font-mono text-xs"
             >
               <div className="flex justify-between gap-2">
                 <span className="text-command-accent">{species.name}</span>
-                <span className="text-slate-500">{species.population}</span>
+                <span className="text-emerald-400">{species.population} pop</span>
               </div>
               <div className="mt-1 flex justify-between text-slate-400">
                 <span>{lifeKindLabel(species.kind)}</span>

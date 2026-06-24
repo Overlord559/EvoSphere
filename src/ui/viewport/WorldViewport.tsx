@@ -21,6 +21,7 @@ function buildColorContext(
   overlay: OverlayMode,
   tileCounts: number[],
   tileBiomass: number[],
+  activityTiles: number[],
 ): TileColorContext | undefined {
   if (overlay !== 'life' && overlay !== 'biomass') return undefined
   return {
@@ -29,6 +30,7 @@ function buildColorContext(
     tileBiomass,
     maxTileCount: maxTileDensity(tileCounts),
     maxTileBiomass: Math.max(0.01, ...tileBiomass),
+    activityTiles: activityTiles.length > 0 ? new Set(activityTiles) : undefined,
   }
 }
 
@@ -40,10 +42,11 @@ function drawWorld(
   selectedTile: Tile | null,
   tileCounts: number[],
   tileBiomass: number[],
+  activityTiles: number[],
 ): void {
   container.removeChildren()
 
-  const baseContext = buildColorContext(overlay, tileCounts, tileBiomass)
+  const baseContext = buildColorContext(overlay, tileCounts, tileBiomass, activityTiles)
 
   for (const tile of world.tiles) {
     const idx = tile.y * world.width + tile.x
@@ -55,6 +58,13 @@ function drawWorld(
     g.rect(tile.x * tileSize, tile.y * tileSize, tileSize, tileSize)
     g.fill(colorForTile(tile, overlay, context))
     container.addChild(g)
+
+    if (context?.activityTiles?.has(idx) && (overlay === 'life' || overlay === 'biomass')) {
+      const pulse = new Graphics()
+      pulse.rect(tile.x * tileSize, tile.y * tileSize, tileSize, tileSize)
+      pulse.stroke({ width: 1, color: 0xfbbf24, alpha: 0.75 })
+      container.addChild(pulse)
+    }
   }
 
   if (selectedTile) {
@@ -82,6 +92,7 @@ export function WorldViewport() {
   const selectTile = useSimulationStore((s) => s.selectTile)
   const selectedTile = useSimulationStore((s) => s.selectedTile)
   const snapshot = useSimulationStore((s) => s.snapshot)
+  const recentActivityTiles = useSimulationStore((s) => s.recentActivityTiles)
 
   const world = snapshot.world
   const { tileCounts, tileBiomass } = snapshot.life
@@ -184,6 +195,7 @@ export function WorldViewport() {
         current.selectedTile,
         current.snapshot.life.tileCounts,
         current.snapshot.life.tileBiomass,
+        current.recentActivityTiles,
       )
       centerWorld(worldContainer, current.snapshot.world, host, viewportRef.current)
 
@@ -223,8 +235,9 @@ export function WorldViewport() {
       selectedTile,
       tileCounts,
       tileBiomass,
+      recentActivityTiles,
     )
-  }, [world, overlayMode, selectedTile, tileCounts, tileBiomass, snapshot.tick])
+  }, [world, overlayMode, selectedTile, tileCounts, tileBiomass, snapshot.tick, recentActivityTiles])
 
   return (
     <div className="flex min-h-[320px] flex-1 flex-col rounded-lg border border-command-border bg-command-surface/60">

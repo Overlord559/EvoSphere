@@ -49,6 +49,8 @@ export interface SpeciesRecord {
   population: number
   totalBiomass: number
   generation: number
+  /** True for shared archetype founder lineages seeded at world init. */
+  isFounderLineage?: boolean
 }
 
 export interface TileLifeData {

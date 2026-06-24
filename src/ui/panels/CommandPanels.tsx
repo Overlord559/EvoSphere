@@ -1,5 +1,6 @@
 import type { PanelId } from '../../store/simulationStore'
 import { useSimulationStore } from '../../store/simulationStore'
+import { BriefingPanel } from './BriefingPanel'
 import { EventsPanel } from './EventsPanel'
 import { InspectorPanel } from './InspectorPanel'
 import { RoadmapPanel } from './RoadmapPanel'
@@ -11,6 +12,7 @@ const PANELS: { id: PanelId; label: string }[] = [
   { id: 'species', label: 'Species' },
   { id: 'events', label: 'Events' },
   { id: 'inspector', label: 'Inspector' },
+  { id: 'briefing', label: 'Briefing' },
   { id: 'roadmap', label: 'Roadmap' },
 ]
 
@@ -24,6 +26,8 @@ function PanelContent({ panel }: { panel: PanelId }) {
       return <EventsPanel />
     case 'inspector':
       return <InspectorPanel />
+    case 'briefing':
+      return <BriefingPanel />
     case 'roadmap':
       return <RoadmapPanel />
   }
@@ -47,7 +51,7 @@ export function CommandPanels() {
               type="button"
               onClick={() => setActivePanel(id)}
               aria-pressed={isActive}
-              className={`rounded px-3 py-1.5 font-mono text-xs transition-colors ${
+              className={`rounded px-2.5 py-1.5 font-mono text-xs transition-colors ${
                 isActive
                   ? 'bg-command-accent/15 text-command-accent'
                   : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
@@ -58,7 +62,7 @@ export function CommandPanels() {
           )
         })}
       </nav>
-      <div className="p-4" role="region" aria-label={`${activePanel} panel`}>
+      <div className="max-h-[calc(100vh-220px)] overflow-y-auto p-4" role="region" aria-label={`${activePanel} panel`}>
         <PanelContent panel={activePanel} />
       </div>
     </aside>

@@ -1,6 +1,11 @@
 import type { Genome } from '../../types/life'
 import type { Rng } from '../../utils/rng'
 import { randomFloat } from '../../utils/rng'
+import { geneticDistance } from '../species/speciesRegistry'
+import {
+  DEFAULT_SPECIATION_CONFIG,
+  type SpeciationConfig,
+} from '../species/speciationConfig'
 import { cloneGenome } from './genome'
 
 const GENOME_KEYS: (keyof Genome)[] = [
@@ -39,10 +44,14 @@ export function mutateGenome(parent: Genome, rng: Rng): Genome {
   return child
 }
 
-export function shouldSpeciate(parent: Genome, child: Genome): boolean {
-  let delta = 0
-  for (const key of GENOME_KEYS) {
-    delta += Math.abs(parent[key] - child[key])
-  }
-  return delta / GENOME_KEYS.length > 0.1
+export function shouldSpeciate(
+  parent: Genome,
+  child: Genome,
+  childGeneration: number,
+  parentSpeciesPopulation: number,
+  config: SpeciationConfig = DEFAULT_SPECIATION_CONFIG,
+): boolean {
+  if (childGeneration < config.minGenerationsBeforeSpeciation) return false
+  if (parentSpeciesPopulation < config.minPopulationForBranch) return false
+  return geneticDistance(parent, child) > config.geneticDistanceThreshold
 }
