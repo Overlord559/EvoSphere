@@ -45,7 +45,18 @@
 - [x] Deep-time progress UI + runtime in summary
 - [x] ~5× faster +10K yr vs v0.3.1 sync benchmark (exact ticks preserved)
 
-## v0.4.1 Spore-Inspired Visual Biology + Biome Renderer ✅ (current)
+## v0.4.2 Real-Time Living Simulation UX + Time Semantics ✅ (current)
+
+- [x] Simulated time display (years, eras, generations) — ticks demoted to debug
+- [x] Play-first controls: Normal, Fast Forward, Super Fast, Ultra Fast
+- [x] Manual step moved to Advanced/Debug controls only
+- [x] Smooth agent tile interpolation in viewport
+- [x] Living animation layer (creatures, plants, biomes, selection glow)
+- [x] Latest Developments feed from real state/events
+- [x] Deep Time: progress bar, current year, elapsed/ETA, cancel, summary
+- [x] Auto-play on app load
+
+## v0.4.1 Spore-Inspired Visual Biology + Biome Renderer ✅
 
 - [x] Organic biome renderer — textured terrain per biome type
 - [x] Procedural plant/producer glyphs keyed to density and biomass

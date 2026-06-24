@@ -273,6 +273,7 @@ export class SimEngine {
     const life = this.life.getSnapshot(includeOrganisms, this.world, agentSnap.agents)
     const briefing = buildBriefing(
       this.tick,
+      this.world,
       life,
       agentSnap,
       this.events,

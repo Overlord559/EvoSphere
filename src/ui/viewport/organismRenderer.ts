@@ -2,6 +2,7 @@ import { Graphics } from 'pixi.js'
 import type { MobileAgent } from '../../types/agents'
 import type { LifeOrganism } from '../../types/life'
 import type { OverlayMode, Tile, World } from '../../types/simulation'
+import type { AgentVisualState } from '../../types/runtime'
 import { maxTileDensity } from '../../simulation/life/LifeSystem'
 import { drawOrganicTile, drawDebugTile } from './biomeRenderer'
 import { drawAgentGlyph } from './agentGlyphs'
@@ -10,6 +11,8 @@ import type { RenderLayers } from './renderLayers'
 import { clearAllLayers } from './renderLayers'
 import type { TileColorContext } from './tileColors'
 import { zoomDetailLevel } from './visualGenes'
+import { interpolatedTilePosition, isAgentMoving } from './agentInterpolation'
+import { pulseAlpha } from './animationLayer'
 
 export type VisualMode = 'organic' | 'debug'
 
@@ -23,6 +26,9 @@ export interface OrganismRenderContext {
   tileBiomass: number[]
   organisms: LifeOrganism[]
   agents: MobileAgent[]
+  agentVisualStates: Map<string, AgentVisualState>
+  animTimeMs: number
+  simTick: number
   activityTiles: number[]
   speciesTileIndices: number[] | null
   selectedSpeciesId: string | null
@@ -70,6 +76,9 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): v
     tileBiomass,
     organisms,
     agents,
+    agentVisualStates,
+    animTimeMs,
+    simTick,
     activityTiles,
     speciesTileIndices,
     selectedSpeciesId,
@@ -93,7 +102,11 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): v
       : undefined
 
     const g = new Graphics()
-    drawTile(g, tile, tileSize, overlay, colorContext)
+    if (visualMode === 'organic') {
+      drawOrganicTile(g, tile, tileSize, overlay, colorContext, animTimeMs, simTick)
+    } else {
+      drawTile(g, tile, tileSize, overlay, colorContext)
+    }
     layers.terrain.addChild(g)
 
     const tileOrgs = orgByTile.get(idx)
@@ -109,32 +122,35 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): v
         tileOrgs,
         detail,
         selectedSpeciesId,
+        animTimeMs,
       )
       layers.plants.addChild(pg)
     }
   }
 
   if (speciesSet) {
+    const pulse = pulseAlpha(animTimeMs, 0.22, 0.08)
     for (const idx of speciesSet) {
       const x = idx % world.width
       const y = Math.floor(idx / world.width)
       const highlight = new Graphics()
       highlight.rect(x * tileSize, y * tileSize, tileSize, tileSize)
-      highlight.fill({ color: 0xa855f7, alpha: 0.22 })
+      highlight.fill({ color: 0xa855f7, alpha: pulse })
       highlight.stroke({ width: 1, color: 0xc084fc, alpha: 0.85 })
       layers.speciesHighlight.addChild(highlight)
     }
   }
 
   const activitySet = new Set(activityTiles)
-  if (baseContext?.activityTiles || activitySet.size > 0) {
+  if (activitySet.size > 0) {
     for (const idx of activitySet) {
       if (overlay !== 'life' && overlay !== 'biomass') continue
       const x = idx % world.width
       const y = Math.floor(idx / world.width)
+      const actPulse = pulseAlpha(animTimeMs + idx, 0.45, 0.35)
       const pulse = new Graphics()
       pulse.rect(x * tileSize, y * tileSize, tileSize, tileSize)
-      pulse.stroke({ width: 1, color: 0xfbbf24, alpha: 0.75 })
+      pulse.stroke({ width: 1, color: 0xfbbf24, alpha: actPulse })
       layers.activity.addChild(pulse)
     }
   }
@@ -143,13 +159,19 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): v
   const agentsToDraw = agents.length > maxAgentsToDraw ? agents.slice(0, maxAgentsToDraw) : agents
 
   for (const agent of agentsToDraw) {
-    const cx = agent.x * tileSize + tileSize / 2
-    const cy = agent.y * tileSize + tileSize / 2
+    const visual = agentVisualStates.get(agent.id)
+    const pos = visual ? interpolatedTilePosition(visual) : { x: agent.x, y: agent.y }
+    const cx = pos.x * tileSize + tileSize / 2
+    const cy = pos.y * tileSize + tileSize / 2
     const isSelectedSpecies = agent.speciesId === selectedSpeciesId
+    const moving = visual ? isAgentMoving(visual) : false
 
     const ag = new Graphics()
     if (visualMode === 'organic') {
-      drawAgentGlyph(ag, agent, cx, cy, tileSize, detail, isSelectedSpecies)
+      drawAgentGlyph(ag, agent, cx, cy, tileSize, detail, isSelectedSpecies, {
+        phaseMs: animTimeMs,
+        moving,
+      })
     } else {
       let color = 0x4ade80
       if (agent.trophicRole === 'predator') color = 0xf87171

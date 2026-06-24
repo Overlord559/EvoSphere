@@ -1,4 +1,5 @@
 import { useSimulationStore } from '../../store/simulationStore'
+import { tickToYears, formatSimYears } from '../../simulation/engine/simTime'
 
 const EVENT_COLORS: Record<string, string> = {
   'life.first': 'text-emerald-400',
@@ -27,23 +28,30 @@ const EVENT_COLORS: Record<string, string> = {
 
 export function EventsPanel() {
   const events = useSimulationStore((s) => s.snapshot.events)
+  const visualMode = useSimulationStore((s) => s.visualMode)
+
+  const visibleEvents = events.filter((e) => e.type !== 'world.tick')
 
   return (
     <div className="space-y-3 text-sm text-slate-300">
-      {events.length === 0 ? (
-        <p className="text-slate-400">No events recorded yet.</p>
+      {visibleEvents.length === 0 ? (
+        <p className="text-slate-400">No developments recorded yet — press Play to watch the world evolve.</p>
       ) : (
         <ul className="space-y-2">
-          {events.map((event) => {
+          {visibleEvents.map((event) => {
             const colorClass = EVENT_COLORS[event.type] ?? 'text-slate-500'
+            const year = formatSimYears(tickToYears(event.tick))
             return (
               <li
                 key={event.id}
                 className="rounded border border-command-border bg-command-bg/60 p-2 font-mono text-xs"
               >
                 <div className="flex justify-between gap-2">
-                  <span className="text-slate-500">tick {event.tick}</span>
-                  <span className={colorClass}>{event.type}</span>
+                  <span className="text-slate-500">Year {year}</span>
+                  {visualMode === 'debug' && (
+                    <span className="text-slate-600">tick {event.tick}</span>
+                  )}
+                  <span className={colorClass}>{event.type.replace(/\./g, ' · ')}</span>
                 </div>
                 <p className="mt-1 text-slate-300">{event.message}</p>
               </li>

@@ -1,6 +1,12 @@
 import { Graphics } from 'pixi.js'
 import type { MobileAgent } from '../../types/agents'
 import { agentVisualTraits, traitsToColor, type ZoomDetail } from './visualGenes'
+import { actionNudge, breatheOffset, wiggleAngle } from './animationLayer'
+
+export interface AgentDrawAnim {
+  phaseMs: number
+  moving: boolean
+}
 
 function rotatePoint(x: number, y: number, angle: number): [number, number] {
   const cos = Math.cos(angle)
@@ -23,11 +29,19 @@ export function drawAgentGlyph(
   tileSize: number,
   detail: ZoomDetail,
   isSelectedSpecies: boolean,
+  anim?: AgentDrawAnim,
 ): void {
+  const phaseMs = anim?.phaseMs ?? 0
+  const nudge = anim ? actionNudge(agent.lastAction, phaseMs) : { dx: 0, dy: 0 }
+  const wiggle = anim ? wiggleAngle(phaseMs, agent.id, anim.moving ? 0.18 : 0.08) : 0
+  const breath = anim ? breatheOffset(phaseMs, 0.4) : 0
+  cx += nudge.dx
+  cy += nudge.dy + breath
+
   const traits = agentVisualTraits(agent)
   const scale = tileSize * 0.45 * traits.bodyScale
   const { color, alpha } = traitsToColor(traits.hue, traits.saturation, traits.brightness, traits.alpha)
-  const angle = traits.facingAngle
+  const angle = traits.facingAngle + wiggle
 
   const bodyW = scale * traits.bodyWidth
   const bodyH = scale * traits.bodyHeight * (traits.compactPosture ? 0.85 : 1)
@@ -60,10 +74,11 @@ export function drawAgentGlyph(
   }
 
   if (isSelectedSpecies) {
-    g.circle(cx, cy, scale * 0.55)
+    const pulse = anim ? 0.55 + Math.sin(phaseMs * 0.004) * 0.08 : 0.55
+    g.circle(cx, cy, scale * pulse)
     g.stroke({ width: 1.5, color: 0xffffff, alpha: 0.75 })
-    g.circle(cx, cy, scale * 0.62)
-    g.stroke({ width: 1, color: 0xc084fc, alpha: 0.6 })
+    g.circle(cx, cy, scale * (pulse + 0.07))
+    g.stroke({ width: 1, color: 0xc084fc, alpha: 0.5 + Math.sin(phaseMs * 0.003) * 0.2 })
   }
 }
 

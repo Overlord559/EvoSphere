@@ -4,14 +4,24 @@ import {
   DEEP_TIME_CHUNK_SIZE,
   DEEP_TIME_UI_SYNC_MS,
 } from '../simulation/engine/SimEngine'
-import { yearsToTicks, tickToYears } from '../simulation/engine/simTime'
+import { yearsToTicks, tickToYears, buildSimTimeDisplay } from '../simulation/engine/simTime'
+import {
+  syncAgentVisualStates,
+  advanceAgentInterpolation,
+} from '../ui/viewport/agentInterpolation'
 import type {
   OverlayMode,
   SimulationSettings,
   SimulationSnapshot,
   Tile,
 } from '../types/simulation'
-import type { DeepTimeProgress, DeepTimeSummary, RuntimeState, SimSpeed } from '../types/runtime'
+import type {
+  AgentVisualState,
+  DeepTimeProgress,
+  DeepTimeSummary,
+  RuntimeState,
+  SimSpeed,
+} from '../types/runtime'
 import { createRng, randomFloat } from '../utils/rng'
 
 export type PanelId = 'world' | 'species' | 'events' | 'inspector' | 'briefing' | 'roadmap'
@@ -25,15 +35,18 @@ const DEFAULT_SETTINGS: SimulationSettings = {
   tickRate: 1,
 }
 
-const SPEED_TICKS_PER_FRAME: Record<Exclude<SimSpeed, 'deep'>, number> = {
-  1: 1,
-  10: 10,
-  100: 50,
-  1000: 200,
+/** Internal simulation steps batched per animation frame by speed mode. */
+export const SPEED_TICKS_PER_FRAME: Record<Exclude<SimSpeed, 'deep'>, number> = {
+  normal: 1,
+  fast: 8,
+  superfast: 30,
+  ultrafast: 100,
 }
 
 /** UI sync interval during deep-time — full snapshot every N engine chunks. */
-const DEEP_TIME_SNAPSHOT_EVERY_CHUNKS = 2
+export const DEEP_TIME_SNAPSHOT_EVERY_CHUNKS = 2
+
+const INTERPOLATION_DURATION_MS = 320
 
 function createEngine(settings: SimulationSettings): SimEngine {
   return new SimEngine({ ...settings })
@@ -50,6 +63,13 @@ function syncSnapshot(engine: SimEngine, selectedSpeciesId: string | null): Simu
   return engine.getSnapshotWithSelectedSpecies(selectedSpeciesId)
 }
 
+function syncVisualStates(
+  agents: SimulationSnapshot['agents']['agents'],
+  prev: Map<string, AgentVisualState>,
+): Map<string, AgentVisualState> {
+  return syncAgentVisualStates(agents, prev)
+}
+
 interface SimulationStore {
   activePanel: PanelId
   phase: string
@@ -64,6 +84,9 @@ interface SimulationStore {
   recentActivityTiles: number[]
   deepTimeRunning: boolean
   deepTimeProgress: DeepTimeProgress | null
+  deepTimeCancelRequested: boolean
+  agentVisualStates: Map<string, AgentVisualState>
+  animTimeMs: number
 
   setActivePanel: (panel: PanelId) => void
   setOverlayMode: (mode: OverlayMode) => void
@@ -79,26 +102,33 @@ interface SimulationStore {
   play: () => void
   pause: () => void
   setSpeed: (speed: SimSpeed) => void
-  deepTimeYears: (years: number) => Promise<DeepTimeSummary>
+  deepTimeYears: (years: number) => Promise<DeepTimeSummary | null>
+  cancelDeepTime: () => void
+  advanceAnimation: (deltaMs: number) => void
   syncFromEngine: () => void
 }
 
 const initialEngine = createEngine(DEFAULT_SETTINGS)
+const initialSnapshot = syncSnapshot(initialEngine, null)
+const initialVisualStates = syncVisualStates(initialSnapshot.agents.agents, new Map())
 
 export const useSimulationStore = create<SimulationStore>((set, get) => ({
-  activePanel: 'world',
-  phase: 'v0.4.1 visual biology',
+  activePanel: 'briefing',
+  phase: 'v0.4.2 living simulation',
   overlayMode: 'terrain',
   visualMode: 'organic',
   selectedTile: null,
   selectedSpeciesId: null,
   settings: { ...DEFAULT_SETTINGS },
   engine: initialEngine,
-  snapshot: syncSnapshot(initialEngine, null),
-  runtime: { isRunning: false, speed: 1 },
+  snapshot: initialSnapshot,
+  runtime: { isRunning: true, speed: 'normal' },
   recentActivityTiles: [],
   deepTimeRunning: false,
   deepTimeProgress: null,
+  deepTimeCancelRequested: false,
+  agentVisualStates: initialVisualStates,
+  animTimeMs: 0,
 
   setActivePanel: (panel) => set({ activePanel: panel }),
   setOverlayMode: (mode) => set({ overlayMode: mode }),
@@ -107,34 +137,42 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
 
   selectSpecies: (speciesId) => {
     const { engine } = get()
+    const snapshot = syncSnapshot(engine, speciesId)
     set({
       selectedSpeciesId: speciesId,
-      snapshot: syncSnapshot(engine, speciesId),
+      snapshot,
+      agentVisualStates: syncVisualStates(snapshot.agents.agents, get().agentVisualStates),
     })
   },
 
   clearSelectedSpecies: () => {
     const { engine } = get()
+    const snapshot = syncSnapshot(engine, null)
     set({
       selectedSpeciesId: null,
-      snapshot: syncSnapshot(engine, null),
+      snapshot,
+      agentVisualStates: syncVisualStates(snapshot.agents.agents, get().agentVisualStates),
     })
   },
 
   focusSpecies: (speciesId) => {
     const { engine } = get()
+    const snapshot = syncSnapshot(engine, speciesId)
     set({
       selectedSpeciesId: speciesId,
       activePanel: 'species',
-      snapshot: syncSnapshot(engine, speciesId),
+      snapshot,
+      agentVisualStates: syncVisualStates(snapshot.agents.agents, get().agentVisualStates),
     })
   },
 
   syncFromEngine: () => {
-    const { engine, selectedSpeciesId } = get()
+    const { engine, selectedSpeciesId, agentVisualStates } = get()
+    const snapshot = syncSnapshot(engine, selectedSpeciesId)
     set({
-      snapshot: syncSnapshot(engine, selectedSpeciesId),
+      snapshot,
       recentActivityTiles: engine.getRecentActivityTileIndices(),
+      agentVisualStates: syncVisualStates(snapshot.agents.agents, agentVisualStates),
     })
   },
 
@@ -145,16 +183,21 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
     const { settings } = get()
     const nextSettings = { ...settings, seed: trimmed }
     const nextEngine = createEngine(nextSettings)
+    const snapshot = syncSnapshot(nextEngine, null)
     set({
       settings: nextSettings,
       engine: nextEngine,
-      snapshot: syncSnapshot(nextEngine, null),
+      snapshot,
       selectedTile: null,
       selectedSpeciesId: null,
-      runtime: { isRunning: false, speed: 1 },
+      runtime: { isRunning: true, speed: 'normal' },
       recentActivityTiles: [],
       deepTimeProgress: null,
+      deepTimeCancelRequested: false,
+      agentVisualStates: syncVisualStates(snapshot.agents.agents, new Map()),
+      animTimeMs: 0,
     })
+    startRuntimeLoop()
   },
 
   newWorldRandomSeed: () => {
@@ -165,21 +208,28 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
     stopRuntimeLoop()
     const { engine, settings, selectedSpeciesId } = get()
     engine.reset({ ...settings })
+    const snapshot = syncSnapshot(engine, selectedSpeciesId)
     set({
-      snapshot: syncSnapshot(engine, selectedSpeciesId),
+      snapshot,
       settings: engine.getSettings(),
       selectedTile: null,
       recentActivityTiles: [],
       deepTimeProgress: null,
+      deepTimeCancelRequested: false,
+      agentVisualStates: syncVisualStates(snapshot.agents.agents, new Map()),
+      runtime: { ...get().runtime, isRunning: true },
     })
+    startRuntimeLoop()
   },
 
   stepSimulation: (count = 1) => {
-    const { engine, selectedSpeciesId } = get()
+    const { engine, selectedSpeciesId, agentVisualStates } = get()
     engine.step(count)
+    const snapshot = syncSnapshot(engine, selectedSpeciesId)
     set({
-      snapshot: syncSnapshot(engine, selectedSpeciesId),
+      snapshot,
       recentActivityTiles: engine.getRecentActivityTileIndices(),
+      agentVisualStates: syncVisualStates(snapshot.agents.agents, agentVisualStates),
     })
   },
 
@@ -201,6 +251,22 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
     set({ runtime: { ...runtime, speed } })
   },
 
+  cancelDeepTime: () => {
+    set({ deepTimeCancelRequested: true })
+  },
+
+  advanceAnimation: (deltaMs) => {
+    const { agentVisualStates, animTimeMs } = get()
+    set({
+      animTimeMs: animTimeMs + deltaMs,
+      agentVisualStates: advanceAgentInterpolation(
+        agentVisualStates,
+        deltaMs,
+        INTERPOLATION_DURATION_MS,
+      ),
+    })
+  },
+
   deepTimeYears: async (years) => {
     stopRuntimeLoop()
     const { engine, runtime, selectedSpeciesId } = get()
@@ -211,15 +277,18 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
 
     set({
       deepTimeRunning: true,
+      deepTimeCancelRequested: false,
       deepTimeProgress: {
         completedTicks: 0,
         totalTicks,
         startYear,
         targetYear,
+        currentYear: startYear,
         elapsedMs: 0,
         mode: 'exact',
+        estimatedRemainingMs: null,
       },
-      runtime: { ...runtime, isRunning: false },
+      runtime: { ...runtime, isRunning: false, speed: 'deep' },
     })
 
     const capture = engine.startDeepTimeCapture(selectedSpeciesId)
@@ -227,6 +296,8 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
     let chunkIndex = 0
 
     while (remaining > 0) {
+      if (get().deepTimeCancelRequested) break
+
       const chunk = Math.min(remaining, DEEP_TIME_CHUNK_SIZE)
       engine.stepDeepTimeBatch(chunk)
       remaining -= chunk
@@ -234,31 +305,31 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
 
       const completedTicks = totalTicks - remaining
       const elapsedMs = performance.now() - runtimeStart
+      const currentYear = startYear + Math.floor(completedTicks / 10)
+      const rate = completedTicks > 0 ? elapsedMs / completedTicks : 0
+      const estimatedRemainingMs = rate > 0 ? Math.round(rate * remaining) : null
+
+      const progress: DeepTimeProgress = {
+        completedTicks,
+        totalTicks,
+        startYear,
+        targetYear,
+        currentYear,
+        elapsedMs,
+        mode: 'exact',
+        estimatedRemainingMs,
+      }
 
       if (chunkIndex % DEEP_TIME_SNAPSHOT_EVERY_CHUNKS === 0 || remaining === 0) {
+        const snapshot = syncSnapshot(engine, selectedSpeciesId)
         set({
-          snapshot: syncSnapshot(engine, selectedSpeciesId),
+          snapshot,
           recentActivityTiles: engine.getRecentActivityTileIndices(),
-          deepTimeProgress: {
-            completedTicks,
-            totalTicks,
-            startYear,
-            targetYear,
-            elapsedMs,
-            mode: 'exact',
-          },
+          deepTimeProgress: progress,
+          agentVisualStates: syncVisualStates(snapshot.agents.agents, get().agentVisualStates),
         })
       } else {
-        set({
-          deepTimeProgress: {
-            completedTicks,
-            totalTicks,
-            startYear,
-            targetYear,
-            elapsedMs,
-            mode: 'exact',
-          },
-        })
+        set({ deepTimeProgress: progress })
       }
 
       if (elapsedMs > DEEP_TIME_UI_SYNC_MS) {
@@ -266,16 +337,21 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
       }
     }
 
-    const summary = engine.finalizeDeepTime(capture)
+    const cancelled = get().deepTimeCancelRequested
+    const summary = cancelled ? null : engine.finalizeDeepTime(capture)
+    const snapshot = syncSnapshot(engine, selectedSpeciesId)
 
     set({
-      snapshot: syncSnapshot(engine, selectedSpeciesId),
-      runtime: { ...runtime, isRunning: false },
+      snapshot,
+      runtime: { isRunning: true, speed: 'normal' },
       recentActivityTiles: engine.getRecentActivityTileIndices(),
       deepTimeRunning: false,
       deepTimeProgress: null,
+      deepTimeCancelRequested: false,
+      agentVisualStates: syncVisualStates(snapshot.agents.agents, get().agentVisualStates),
     })
 
+    startRuntimeLoop()
     return summary
   },
 }))
@@ -294,19 +370,24 @@ function startRuntimeLoop(): void {
 
   const tick = () => {
     const state = useSimulationStore.getState()
-    if (!state.runtime.isRunning) return
+    if (!state.runtime.isRunning || state.deepTimeRunning) {
+      runtimeFrameId = requestAnimationFrame(tick)
+      return
+    }
 
     const speed = state.runtime.speed
     if (speed === 'deep') {
-      state.pause()
+      runtimeFrameId = requestAnimationFrame(tick)
       return
     }
 
     const ticks = SPEED_TICKS_PER_FRAME[speed]
     state.engine.step(ticks)
+    const snapshot = syncSnapshot(state.engine, state.selectedSpeciesId)
     useSimulationStore.setState({
-      snapshot: syncSnapshot(state.engine, state.selectedSpeciesId),
+      snapshot,
       recentActivityTiles: state.engine.getRecentActivityTileIndices(),
+      agentVisualStates: syncVisualStates(snapshot.agents.agents, state.agentVisualStates),
     })
 
     runtimeFrameId = requestAnimationFrame(tick)
@@ -315,7 +396,16 @@ function startRuntimeLoop(): void {
   runtimeFrameId = requestAnimationFrame(tick)
 }
 
-export { SPEED_TICKS_PER_FRAME, DEEP_TIME_SNAPSHOT_EVERY_CHUNKS }
+startRuntimeLoop()
+
+export function getSimTimeDisplay(state: ReturnType<typeof useSimulationStore.getState>) {
+  return buildSimTimeDisplay(
+    state.snapshot.tick,
+    state.snapshot.life,
+    state.snapshot.agents,
+    state.runtime.speed,
+  )
+}
 
 function yieldToBrowser(): Promise<void> {
   return new Promise((resolve) => {

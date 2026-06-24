@@ -2,11 +2,20 @@
 
 Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, mobile agents with predation, and Spore-inspired procedural Pixi viewport rendering.
 
-**Current phase:** v0.4.1 Spore-Inspired Visual Biology + Biome Renderer
+**Current phase:** v0.4.2 Real-Time Living Simulation UX + Time Semantics
 
 ## Status
 
-v0.4.1 upgrades the visual layer from debug pixels to observable living forms:
+v0.4.2 makes the world feel alive instead of tick-debugged:
+
+- **Simulated time UI** — years, eras, generations; ticks hidden unless Debug mode
+- **Play-first controls** — Play/Pause, Normal/Fast/Super Fast/Ultra Fast (manual step moved to debug)
+- **Smooth agent motion** — tile-based sim with interpolated viewport movement
+- **Living animations** — creature wiggle, hunt/graze hints, plant pulse, river/vent shimmer, species glow pulse
+- **Latest Developments feed** — natural-language briefing from real simulation state
+- **Deep Time UX** — progress bar, current year, ETA, cancel, honest long-running labels
+
+v0.4.1 visual layer:
 
 - **Organic biome renderer** — textured terrain per biome (ocean waves, forest canopies, grass strokes, desert dunes, swamp reeds, volcanic embers, hydrothermal vents)
 - **Procedural plant/producer glyphs** — algae clouds, microbial mats, stems, canopies, reeds, grass clusters keyed to density/biomass

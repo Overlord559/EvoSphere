@@ -44,6 +44,14 @@ export interface DeepTimeSummary {
   dominantTrophicShift: string | null
 }
 
+export interface LatestDevelopment {
+  id: string
+  message: string
+  severity: 'info' | 'warning' | 'positive'
+  year: number
+  tick: number
+}
+
 export interface BriefingSnapshot {
   simulatedYear: number
   estimatedGenerations: number
@@ -64,6 +72,8 @@ export interface BriefingSnapshot {
   predatorPreyTrend: string | null
   foodWebWarning: string | null
   recentFoodWebEvent: string | null
+  /** Natural-language developments derived from live simulation state. */
+  latestDevelopments: LatestDevelopment[]
 }
 
 export interface SelectedSpeciesBriefing {
@@ -126,11 +136,21 @@ export type EventCategory =
   | 'foodweb.predator_starvation'
   | 'foodweb.population_cycle'
 
-export type SimSpeed = 1 | 10 | 100 | 1000 | 'deep'
+export type SimSpeed = 'normal' | 'fast' | 'superfast' | 'ultrafast' | 'deep'
 
 export interface RuntimeState {
   isRunning: boolean
   speed: SimSpeed
+}
+
+export interface AgentVisualState {
+  id: string
+  fromX: number
+  fromY: number
+  toX: number
+  toY: number
+  progress: number
+  lastAction: string
 }
 
 export interface DeepTimeProgress {
@@ -138,6 +158,8 @@ export interface DeepTimeProgress {
   totalTicks: number
   startYear: number
   targetYear: number
+  currentYear: number
   elapsedMs: number
-  mode: 'exact' | 'accelerated'
+  mode: 'exact'
+  estimatedRemainingMs: number | null
 }

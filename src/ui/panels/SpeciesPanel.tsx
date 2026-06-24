@@ -4,7 +4,9 @@ import { lifeKindLabel, terrainLabel } from '../viewport/tileColors'
 
 export function SpeciesPanel() {
   const life = useSimulationStore((s) => s.snapshot.life)
-  const tick = useSimulationStore((s) => s.snapshot.tick)
+  const visualMode = useSimulationStore((s) => s.visualMode)
+  const briefing = useSimulationStore((s) => s.snapshot.briefing)
+  const snapshotTick = useSimulationStore((s) => s.snapshot.tick)
   const selectedSpeciesId = useSimulationStore((s) => s.selectedSpeciesId)
   const selectSpecies = useSimulationStore((s) => s.selectSpecies)
   const clearSelectedSpecies = useSimulationStore((s) => s.clearSelectedSpecies)
@@ -23,8 +25,7 @@ export function SpeciesPanel() {
   if (life.totalOrganisms === 0 && agents.totalAgents === 0) {
     return (
       <p className="text-sm text-slate-400">
-        No living organisms yet. Step the simulation or generate a world with suitable
-        hydrothermal, aquatic, and fertile land tiles.
+        No living organisms yet. Press Play or generate a world with suitable hydrothermal, aquatic, and fertile land tiles.
       </p>
     )
   }
@@ -90,7 +91,10 @@ export function SpeciesPanel() {
       )}
 
       <dl className="space-y-1.5 font-mono text-xs">
-        <Row label="Tick" value={String(tick)} />
+        <Row label="Simulated year" value={String(briefing.simulatedYear)} />
+        {visualMode === 'debug' && (
+          <Row label="Internal tick" value={String(snapshotTick)} />
+        )}
         <Row label="Total organisms" value={String(life.totalOrganisms)} />
         <Row label="Species (alive)" value={String(aliveSpecies.length)} />
       </dl>

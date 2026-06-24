@@ -3,6 +3,7 @@ import type { LifeKind, LifeOrganism } from '../../types/life'
 import type { Tile, TerrainType } from '../../types/simulation'
 import { producerVisualTraits, traitsToColor, type ZoomDetail } from './visualGenes'
 import { hash01, hashAngle, hashRange } from './visualHash'
+import { pulseAlpha } from './animationLayer'
 
 const PRODUCER_DENSITY_THRESHOLD = 0.08
 
@@ -175,6 +176,7 @@ export function drawPlantGlyphsForTile(
   organisms: LifeOrganism[],
   detail: ZoomDetail,
   selectedSpeciesId: string | null,
+  animPhaseMs = 0,
 ): void {
   if (!shouldDrawProducers(tileCount, maxCount)) return
 
@@ -185,10 +187,14 @@ export function drawPlantGlyphsForTile(
 
   const kind = dominantKindOnTile(organisms)
   const rep = organisms.find((o) => o.kind === kind) ?? representative
-  const density = tileCount / Math.max(1, maxCount)
+  const densityNorm = tileCount / Math.max(1, maxCount)
+  const thinFromOvergraze = densityNorm < 0.15 && tileBiomass < 0.5
 
-  const traits = producerVisualTraits(kind, rep.genome, tileBiomass, density, tile.terrain)
-  const { color, alpha: baseAlpha } = traitsToColor(traits.hue, traits.saturation, traits.brightness, traits.opacity)
+  const traits = producerVisualTraits(kind, rep.genome, tileBiomass, densityNorm, tile.terrain)
+  let { color, alpha: baseAlpha } = traitsToColor(traits.hue, traits.saturation, traits.brightness, traits.opacity)
+  if (thinFromOvergraze) baseAlpha *= 0.55
+  else if (densityNorm > 0.5) baseAlpha = Math.min(1, baseAlpha * 1.15)
+  baseAlpha *= pulseAlpha(animPhaseMs, 0.85, 0.12)
 
   const hasSelectedProducer = selectedSpeciesId
     ? organisms.some((o) => o.speciesId === selectedSpeciesId)

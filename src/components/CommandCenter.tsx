@@ -38,8 +38,7 @@ export function CommandCenter() {
 
       <footer className="border-t border-command-border px-6 py-3">
         <p className="font-mono text-xs text-slate-500">
-          v0.3.2 — species highlight + deep-time performance. Select a species to highlight its range on the map.
-          v0.4 adds mobile agents and predation.
+          v0.4.2 — real-time living simulation. Press Play to watch evolution unfold. Briefing panel shows latest developments.
         </p>
       </footer>
     </div>

@@ -86,13 +86,29 @@ Same `SimulationSettings` (seed, width, height) always yields identical `Tile[]`
 
 Deep-time buttons convert years → ticks via `yearsToTicks()`. Summaries report start/end tick and year.
 
-## Runtime Loop
+## Runtime Loop (v0.4.2)
 
-- `SimEngine` owns all mutation
-- Zustand store mirrors snapshots after each step
-- `requestAnimationFrame` loop in store (not React render) drives continuous run at 1×–1000×
-- Deep time uses chunked stepping (`DEEP_TIME_CHUNK_SIZE = 250`) to avoid browser lockups
-- UI calls store actions only; viewport is read-only
+- `SimEngine` owns all mutation; ticks are **internal only**
+- UI displays **simulated years**, **eras**, and **generations**
+- Zustand store mirrors snapshots; `requestAnimationFrame` drives continuous run
+- Speed modes: `normal` (1 tick/frame), `fast` (8), `superfast` (30), `ultrafast` (100)
+- Viewport runs separate animation RAF for interpolation + visual effects
+- Agent visual states interpolate between tile positions (~320ms ease)
+- Deep time uses chunked stepping with progress, ETA, and cancel support
+- Auto-play enabled on load; manual step only in Debug/Advanced controls
+
+## Simulated Time (v0.4.2)
+
+| Unit | Mapping | UI visibility |
+|------|---------|---------------|
+| Tick | Internal atomic step | Debug mode only |
+| Simulated year | 10 ticks | Primary display |
+| Generation | ~25 ticks (estimate) | Briefing / World panel |
+| Era | Derived from life state | Briefing header |
+
+Eras: Abiogenesis / Simple Life → Early Photosynthetic → Primitive Plant Colonization → Early Food Web → Predator-Prey World
+
+## Runtime Loop (v0.3.2 — superseded)
 
 ## SimEngine (v0.4)
 

@@ -12,6 +12,7 @@ import { SimulationControls } from './SimulationControls'
 export function WorldPanel() {
   const snapshot = useSimulationStore((s) => s.snapshot)
   const settings = useSimulationStore((s) => s.settings)
+  const visualMode = useSimulationStore((s) => s.visualMode)
   const newWorldFromSeed = useSimulationStore((s) => s.newWorldFromSeed)
 
   const [seedInput, setSeedInput] = useState(settings.seed)
@@ -50,10 +51,14 @@ export function WorldPanel() {
       <dl className="space-y-1.5 font-mono text-xs">
         <Row label="Simulated year" value={formatSimYears(tickToYears(snapshot.tick))} />
         <Row label="Era" value={briefing.era} />
+        <Row label="Est. generations" value={`~${briefing.estimatedGenerations}`} />
         <Row label="Active seed" value={world.seed} />
         <Row label="Dimensions" value={`${world.width} × ${world.height}`} />
-        <Row label="Tick" value={String(snapshot.tick)} />
+        {visualMode === 'debug' && (
+          <Row label="Internal tick" value={String(snapshot.tick)} />
+        )}
         <Row label="Total life" value={String(life.totalOrganisms)} />
+        <Row label="Mobile agents" value={String(snapshot.agents.totalAgents)} />
         <Row label="Total biomass" value={life.totalBiomass.toFixed(1)} />
         <Row label="Species (alive)" value={String(aliveSpecies)} />
         <Row label="Avg temperature" value={formatTemperature(stats.averageTemperature)} />

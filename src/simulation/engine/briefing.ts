@@ -12,9 +12,12 @@ import {
   tickToGenerations,
   tickToYears,
 } from '../engine/simTime'
+import { buildLatestDevelopments } from '../engine/developments'
+import type { World } from '../../types/simulation'
 
 export function buildBriefing(
   tick: number,
+  world: World,
   life: LifeSnapshot,
   agents: AgentSnapshot,
   events: EventLogEntry[],
@@ -79,7 +82,7 @@ export function buildBriefing(
   return {
     simulatedYear: tickToYears(tick),
     estimatedGenerations: tickToGenerations(tick),
-    era: eraForTick(tick, hasPlants, hasAlgae, agents.totalAgents > 0),
+    era: eraForTick(tick, hasPlants, hasAlgae, agents.totalAgents > 0, agents.predatorCount),
     totalOrganisms: life.totalOrganisms + agents.totalAgents,
     totalBiomass: life.totalBiomass + agents.totalBiomass,
     speciesCount: aliveSpecies.length,
@@ -95,6 +98,15 @@ export function buildBriefing(
     predatorPreyTrend,
     foodWebWarning,
     recentFoodWebEvent: foodWebEvent?.message ?? null,
+    latestDevelopments: buildLatestDevelopments(
+      tick,
+      world,
+      life,
+      agents,
+      events,
+      selectedSpeciesId,
+      speciesPopHistory,
+    ),
   }
 }
 

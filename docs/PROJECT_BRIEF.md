@@ -22,7 +22,19 @@ Evolution and emergence are fascinating but hard to explore interactively. Most 
 4. **Browser-first** — no install, no backend, IndexedDB for persistence later
 5. **Honest scope** — no fake data, no dead controls, no spectacle without substance
 
-## v0.4.1 Spore-Inspired Visual Biology + Biome Renderer ✅ (current)
+## v0.4.2 Real-Time Living Simulation UX + Time Semantics ✅ (current)
+
+Delivered:
+
+- Simulated time semantics (years, eras, generations) — ticks internal only
+- Play-first runtime with Normal / Fast / Super Fast / Ultra Fast speed modes
+- Smooth agent interpolation between tile positions
+- Visual animation layer (breathing, wiggle, biome shimmer, activity pulse)
+- Latest Developments feed in Briefing panel
+- Deep Time progress, ETA, cancel, and summary UX
+- Auto-play on load; Debug mode exposes internal tick stepping
+
+## v0.4.1 Spore-Inspired Visual Biology + Biome Renderer ✅
 
 Delivered:
 

@@ -2,11 +2,18 @@ import { useSimulationStore } from '../../store/simulationStore'
 import { formatSimYears } from '../../simulation/engine/simTime'
 import { lifeKindLabel } from '../viewport/tileColors'
 
+const SEVERITY_STYLES = {
+  info: 'border-command-border text-slate-300',
+  warning: 'border-amber-500/30 text-amber-200',
+  positive: 'border-emerald-500/30 text-emerald-200',
+} as const
+
 export function BriefingPanel() {
   const briefing = useSimulationStore((s) => s.snapshot.briefing)
-  const tick = useSimulationStore((s) => s.snapshot.tick)
+  const visualMode = useSimulationStore((s) => s.visualMode)
   const deep = briefing.latestDeepTimeSummary
   const selected = briefing.selectedSpecies
+  const developments = briefing.latestDevelopments
 
   return (
     <div className="space-y-4 text-sm text-slate-300">
@@ -44,8 +51,29 @@ export function BriefingPanel() {
             Year {formatSimYears(briefing.simulatedYear)}
           </p>
           <p className="font-mono text-xs text-slate-400">
-            Tick {tick} · ~{briefing.estimatedGenerations} gen · {briefing.era}
+            {briefing.era} · ~{briefing.estimatedGenerations} generations
           </p>
+          {visualMode === 'debug' && (
+            <p className="font-mono text-[10px] text-slate-600">
+              debug: internal generation estimate only
+            </p>
+          )}
+        </div>
+      )}
+
+      {developments.length > 0 && (
+        <div>
+          <p className="mb-2 font-mono text-xs text-slate-500">LATEST DEVELOPMENTS</p>
+          <ul className="space-y-2">
+            {developments.map((dev) => (
+              <li
+                key={dev.id}
+                className={`rounded border bg-command-bg/60 p-2 font-mono text-xs ${SEVERITY_STYLES[dev.severity]}`}
+              >
+                {dev.message}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -94,13 +122,13 @@ export function BriefingPanel() {
 
       {deep && (
         <div>
-          <p className="mb-1 font-mono text-xs text-slate-500">LATEST DEEP TIME</p>
+          <p className="mb-1 font-mono text-xs text-slate-500">LATEST DEEP TIME SUMMARY</p>
           <dl className="space-y-1 rounded border border-amber-500/20 bg-amber-500/5 p-2 font-mono text-xs">
             <Row
               label="Span"
               value={`${formatSimYears(deep.startYear)} → ${formatSimYears(deep.endYear)} (${deep.elapsedSimYears} yr)`}
             />
-            <Row label="Runtime" value={`${deep.runtimeSeconds.toFixed(1)}s`} />
+            <Row label="Runtime" value={`${deep.runtimeSeconds.toFixed(1)}s real time`} />
             <Row
               label="Organisms"
               value={`${deep.startOrganisms} → ${deep.endOrganisms} (${deep.organismDelta >= 0 ? '+' : ''}${deep.organismDelta})`}

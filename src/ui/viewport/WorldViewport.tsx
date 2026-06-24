@@ -33,6 +33,10 @@ export function WorldViewport() {
   const snapshot = useSimulationStore((s) => s.snapshot)
   const recentActivityTiles = useSimulationStore((s) => s.recentActivityTiles)
   const selectedSpeciesId = useSimulationStore((s) => s.selectedSpeciesId)
+  const agentVisualStates = useSimulationStore((s) => s.agentVisualStates)
+  const animTimeMs = useSimulationStore((s) => s.animTimeMs)
+  const advanceAnimation = useSimulationStore((s) => s.advanceAnimation)
+  const runtime = useSimulationStore((s) => s.runtime)
 
   const world = snapshot.world
   const { tileCounts, tileBiomass, speciesOccupancy, organisms } = snapshot.life
@@ -46,20 +50,26 @@ export function WorldViewport() {
   const redraw = () => {
     const layers = layersRef.current
     if (!layers) return
+    const state = useSimulationStore.getState()
     renderWorld(layers, {
-      world,
-      overlay: overlayMode,
+      world: state.snapshot.world,
+      overlay: state.overlayMode,
       tileSize: BASE_TILE_SIZE,
       zoom: viewportRef.current.zoom,
-      visualMode,
-      tileCounts,
-      tileBiomass,
-      organisms,
-      agents,
-      activityTiles: recentActivityTiles,
-      speciesTileIndices,
-      selectedSpeciesId,
-      selectedTile,
+      visualMode: state.visualMode,
+      tileCounts: state.snapshot.life.tileCounts,
+      tileBiomass: state.snapshot.life.tileBiomass,
+      organisms: state.snapshot.life.organisms,
+      agents: state.snapshot.agents.agents,
+      agentVisualStates: state.agentVisualStates,
+      animTimeMs: state.animTimeMs,
+      simTick: state.snapshot.tick,
+      activityTiles: state.recentActivityTiles,
+      speciesTileIndices: state.selectedSpeciesId
+        ? (state.snapshot.life.speciesOccupancy[state.selectedSpeciesId]?.tileIndices ?? null)
+        : null,
+      selectedSpeciesId: state.selectedSpeciesId,
+      selectedTile: state.selectedTile,
     })
   }
 
@@ -72,6 +82,8 @@ export function WorldViewport() {
     let destroyed = false
     let app: Application | null = null
     let cleanupListeners: (() => void) | undefined
+    let animFrameId = 0
+    let lastAnimMs = performance.now()
 
     const run = async () => {
       app = new Application()
@@ -103,13 +115,25 @@ export function WorldViewport() {
       const observer = new ResizeObserver(resize)
       observer.observe(host)
 
+      const animLoop = (now: number) => {
+        if (destroyed) return
+        const delta = now - lastAnimMs
+        lastAnimMs = now
+        const state = useSimulationStore.getState()
+        if (!state.deepTimeRunning) {
+          state.advanceAnimation(delta)
+        }
+        redrawRef.current()
+        animFrameId = requestAnimationFrame(animLoop)
+      }
+      animFrameId = requestAnimationFrame(animLoop)
+
       const onWheel = (e: WheelEvent) => {
         e.preventDefault()
         const vp = viewportRef.current
         const delta = e.deltaY > 0 ? 0.9 : 1.1
         vp.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, vp.zoom * delta))
         layers.root.scale.set(vp.zoom)
-        redrawRef.current()
       }
 
       const onPointerDown = (e: PointerEvent) => {
@@ -155,27 +179,11 @@ export function WorldViewport() {
       app.canvas.addEventListener('pointerleave', onPointerUp)
       app.canvas.addEventListener('click', onClick)
 
-      const current = useSimulationStore.getState()
-      renderWorld(layers, {
-        world: current.snapshot.world,
-        overlay: current.overlayMode,
-        tileSize: BASE_TILE_SIZE,
-        zoom: viewportRef.current.zoom,
-        visualMode: current.visualMode,
-        tileCounts: current.snapshot.life.tileCounts,
-        tileBiomass: current.snapshot.life.tileBiomass,
-        organisms: current.snapshot.life.organisms,
-        agents: current.snapshot.agents.agents,
-        activityTiles: current.recentActivityTiles,
-        speciesTileIndices: current.selectedSpeciesId
-          ? (current.snapshot.life.speciesOccupancy[current.selectedSpeciesId]?.tileIndices ?? null)
-          : null,
-        selectedSpeciesId: current.selectedSpeciesId,
-        selectedTile: current.selectedTile,
-      })
-      centerWorld(layers.root, current.snapshot.world, host, viewportRef.current)
+      redrawRef.current()
+      centerWorld(layers.root, useSimulationStore.getState().snapshot.world, host, viewportRef.current)
 
       cleanupListeners = () => {
+        cancelAnimationFrame(animFrameId)
         observer.disconnect()
         app?.canvas.removeEventListener('wheel', onWheel)
         app?.canvas.removeEventListener('pointerdown', onPointerDown)
@@ -198,11 +206,27 @@ export function WorldViewport() {
       }
       host.innerHTML = ''
     }
-  }, [world.id, selectTile])
+  }, [world.id, selectTile, advanceAnimation])
 
   useEffect(() => {
     redrawRef.current()
-  }, [world, overlayMode, visualMode, selectedTile, tileCounts, tileBiomass, snapshot.tick, recentActivityTiles, speciesTileIndices, agents, organisms, selectedSpeciesId])
+  }, [
+    world,
+    overlayMode,
+    visualMode,
+    selectedTile,
+    tileCounts,
+    tileBiomass,
+    snapshot.tick,
+    recentActivityTiles,
+    speciesTileIndices,
+    agents,
+    organisms,
+    selectedSpeciesId,
+    agentVisualStates,
+    animTimeMs,
+    runtime.isRunning,
+  ])
 
   return (
     <div className="flex min-h-[320px] flex-1 flex-col rounded-lg border border-command-border bg-command-surface/60">
@@ -249,6 +273,11 @@ export function WorldViewport() {
         >
           Debug
         </button>
+        {runtime.isRunning && (
+          <span className="ml-auto rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] text-emerald-400">
+            LIVE
+          </span>
+        )}
       </div>
       <div
         ref={containerRef}
@@ -256,7 +285,7 @@ export function WorldViewport() {
         aria-label="World viewport"
       />
       <p className="border-t border-command-border px-3 py-2 font-mono text-xs text-slate-500">
-        Scroll to zoom · drag to pan · click tile to inspect · Organic mode shows procedural creatures and biomes
+        Living world — scroll to zoom · drag to pan · click to inspect · press Play to watch evolution unfold
       </p>
     </div>
   )

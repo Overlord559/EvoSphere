@@ -3,7 +3,7 @@ import type { LifeSnapshot } from './life'
 import type { BriefingSnapshot, DeepTimeSummary } from './runtime'
 
 export type { LifeSnapshot } from './life'
-export type { BriefingSnapshot, DeepTimeSummary, DeepTimeProgress, RuntimeState, SimSpeed, SelectedSpeciesBriefing } from './runtime'
+export type { BriefingSnapshot, DeepTimeSummary, DeepTimeProgress, RuntimeState, SimSpeed, SelectedSpeciesBriefing, LatestDevelopment, AgentVisualState } from './runtime'
 
 export type TerrainType =
   | 'deep_ocean'

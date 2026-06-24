@@ -2,6 +2,7 @@ import { Graphics } from 'pixi.js'
 import type { OverlayMode, Tile, TerrainType } from '../../types/simulation'
 import { colorForTile, type TileColorContext } from './tileColors'
 import { hash01, hashAngle, hashRange } from './visualHash'
+import { pulseAlpha, seasonTint, shimmerOffset } from './animationLayer'
 
 function adjustColor(base: number, dr: number, dg: number, db: number): number {
   const r = Math.max(0, Math.min(255, ((base >> 16) & 0xff) + dr))
@@ -29,6 +30,7 @@ function drawBiomeTexture(
   py: number,
   tileSize: number,
   baseColor: number,
+  animPhaseMs = 0,
 ): void {
   const { x, y, terrain } = tile
   const detail = tileSize >= 8
@@ -191,8 +193,9 @@ function drawBiomeTexture(
       g.rect(px, py, tileSize, tileSize)
       g.fill(baseColor)
       const flowDir = hash01(x, y, 220) > 0.5 ? 1 : -1
+      const wave = shimmerOffset(animPhaseMs, x + y)
       for (let i = 0; i < 3; i++) {
-        const fy = py + (i + 1) * tileSize * 0.25
+        const fy = py + (i + 1) * tileSize * 0.25 + wave * 0.3
         g.moveTo(px, fy)
         g.bezierCurveTo(
           px + tileSize * 0.33, fy + flowDir * tileSize * 0.06,
@@ -223,15 +226,17 @@ function drawBiomeTexture(
       const vy = py + tileSize * 0.55
       g.circle(vx, vy, tileSize * 0.12)
       g.fill({ color: 0x2a1a4a, alpha: 0.8 })
+      const plumeAlpha = pulseAlpha(animPhaseMs, 0.28, 0.12)
       for (let i = 0; i < 4; i++) {
         const ox = hashRange(x, y, 260 + i, -0.15, 0.15) * tileSize
+        const sway = shimmerOffset(animPhaseMs, i) * 0.5
         g.moveTo(vx, vy)
         g.bezierCurveTo(
-          vx + ox, vy - tileSize * 0.15,
-          vx + ox * 1.5, vy - tileSize * 0.35,
-          vx + ox * 0.5, vy - tileSize * 0.5,
+          vx + ox + sway, vy - tileSize * 0.15,
+          vx + ox * 1.5 + sway, vy - tileSize * 0.35,
+          vx + ox * 0.5 + sway, vy - tileSize * 0.5,
         )
-        g.stroke({ width: 1.2, color: 0x7cfc00, alpha: 0.25 + i * 0.08 })
+        g.stroke({ width: 1.2, color: 0x7cfc00, alpha: plumeAlpha + i * 0.06 })
       }
       break
     }
@@ -257,6 +262,8 @@ export function drawOrganicTile(
   tileSize: number,
   overlay: OverlayMode,
   context?: TileColorContext,
+  animPhaseMs = 0,
+  simTick = 0,
 ): void {
   const px = tile.x * tileSize
   const py = tile.y * tileSize
@@ -265,8 +272,14 @@ export function drawOrganicTile(
   g.rect(px, py, tileSize, tileSize)
   g.fill(baseColor)
 
+  const tint = seasonTint(animPhaseMs, simTick)
+  if (tint !== 0) {
+    g.rect(px, py, tileSize, tileSize)
+    g.fill({ color: tint > 0 ? 0xfff4e0 : 0xd0e8ff, alpha: Math.abs(tint) })
+  }
+
   if (overlay === 'terrain' || overlay === 'life' || overlay === 'biomass') {
-    drawBiomeTexture(g, tile, px, py, tileSize, baseColor)
+    drawBiomeTexture(g, tile, px, py, tileSize, baseColor, animPhaseMs)
   }
 }
 
