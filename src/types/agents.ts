@@ -1,3 +1,4 @@
+import type { AgentMemory } from './cognition'
 import type { Genome } from './life'
 import type { BodyPlan } from './bodyPlan'
 import type { SensoryInputSummary, SensoryProfile } from './senses'
@@ -66,6 +67,10 @@ export interface MobileAgent {
   environmentalFitness: number
   lastAction: AgentAction
   biomass: number
+  /** Tiny inheritable adaptive controller (proto-cognition). */
+  controller: import('../simulation/cognition/NeuralController').NeuralController | null
+  /** Individual memory — food, danger, preferences. */
+  memory: AgentMemory | null
 }
 
 export interface FoodWebLink {

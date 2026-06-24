@@ -12,7 +12,9 @@
     "qa:performance": "tsx scripts/qa-performance.ts",
     "qa:crash-repro": "tsx scripts/qa-crash-repro.ts",
     "qa:longrun": "tsx scripts/qa-longrun.ts",
-    "qa:worldgen": "tsx scripts/qa-worldgen.ts"
+    "qa:worldgen": "tsx scripts/qa-worldgen.ts",
+    "qa:succession": "tsx scripts/qa-succession.ts",
+    "qa:evolution": "tsx scripts/qa-evolution.ts"
   },
   "dependencies": {
     "idb": "^8.0.3",

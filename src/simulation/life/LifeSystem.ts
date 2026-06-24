@@ -20,7 +20,9 @@ import {
   computeMetabolismCost,
   environmentalStress,
 } from '../ecology/energy'
-import { mutateGenome, shouldSpeciate } from '../genetics/mutation'
+import { mutateGenome } from '../genetics/mutation'
+import { adaptiveRadiationMessage, evaluateBranchCandidate } from '../evolution/adaptiveRadiation'
+import type { RecoveryModifiers } from '../evolution/bottleneckRecovery'
 import { getTileAt } from '../world/generateWorld'
 import { isTileActive } from '../world/planetMask'
 import {
@@ -63,6 +65,12 @@ export class LifeSystem {
   private recentActivityTiles = new Set<number>()
   private lastTickBirths = 0
   private lastTickDeaths = 0
+  private recoveryMods: RecoveryModifiers = {
+    reproductionBoost: 1,
+    dispersalBoost: 1,
+    mutationVarianceBoost: 1,
+    overcrowdingRelief: 1,
+  }
 
   constructor(seed: string, world: World) {
     this.seed = seed
@@ -405,6 +413,10 @@ export class LifeSystem {
     return changed
   }
 
+  setRecoveryModifiers(mods: RecoveryModifiers): void {
+    this.recoveryMods = mods
+  }
+
   getRegistry(): SpeciesRegistry {
     return this.registry
   }
@@ -439,6 +451,10 @@ export class LifeSystem {
 
   getTileBiomassArray(): number[] {
     return this.tileBiomass
+  }
+
+  getTileCountsArray(): number[] {
+    return this.tileCounts
   }
 
   getPopulationMap(): Map<string, { count: number; biomass: number }> {
@@ -535,7 +551,7 @@ export class LifeSystem {
     emit: LifeEventEmitter,
     suppressMinorEvents: boolean,
   ): LifeOrganism | null {
-    if (this.tickRng() > parent.genome.reproductionRate * parent.genome.spreadRate + 0.15) {
+    if (this.tickRng() > parent.genome.reproductionRate * parent.genome.spreadRate * this.recoveryMods.reproductionBoost + 0.15) {
       return null
     }
 
@@ -563,33 +579,46 @@ export class LifeSystem {
     let speciesId = parent.speciesId
     const childGeneration = parent.generation + 1
     const parentPop = this.registry.getPopulation(parent.speciesId)
+    const homeTile = getTileAt(world, pick.x, pick.y) ?? getTileAt(world, parent.x, parent.y)
 
-    if (
-      shouldSpeciate(
+    if (homeTile) {
+      const config = DEFAULT_SPECIATION_CONFIG
+      const branch = evaluateBranchCandidate(
         parent.genome,
         childGenome,
+        homeTile,
         childGeneration,
         parentPop,
-        DEFAULT_SPECIATION_CONFIG,
+        config,
+        tick - (this.registry.get(parent.speciesId)?.createdAtTick ?? tick),
+        1,
       )
-    ) {
-      const existing = this.registry.findByGenome(parent.kind, childGenome)
-      if (existing) {
-        speciesId = existing.id
-      } else {
-        const species = this.registry.registerBranch(
-          parent.kind,
-          childGenome,
-          tick,
-          parent.speciesId,
-          childGeneration,
-        )
-        speciesId = species.id
-        if (!suppressMinorEvents) {
-          emit(
-            'life.speciation',
-            `New species "${species.name}" diverged from ${parent.kind} (gen ${childGeneration}, pop ${parentPop})`,
+
+      if (branch.shouldBranch) {
+        const existing = this.registry.findByGenome(parent.kind, childGenome, config.geneticDistanceVariantThreshold)
+        if (existing && existing.establishmentStatus !== 'failed') {
+          speciesId = existing.id
+        } else {
+          const species = this.registry.registerBranch(
+            parent.kind,
+            childGenome,
+            tick,
+            parent.speciesId,
+            childGeneration,
+            {
+              rank: branch.rank,
+              localFitnessScore: branch.localFitnessScore,
+              adaptedTerrain: branch.adaptedTerrain,
+              reason: branch.reason,
+            },
           )
+          speciesId = species.id
+          if (!suppressMinorEvents && branch.rank !== 'variant') {
+            emit(
+              branch.rank === 'species' ? 'evolution.species_stabilized' : 'evolution.subspecies_emerged',
+              adaptiveRadiationMessage(branch.rank, parent.kind, branch.reason, tick),
+            )
+          }
         }
       }
     }

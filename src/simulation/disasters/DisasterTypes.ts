@@ -36,6 +36,9 @@ export interface DisasterSnapshot {
   active: ActiveDisaster[]
   recentEnded: ActiveDisaster[]
   stressTileIds: number[]
+  settings?: import('../config/disasterConfig').DisasterSettings
+  lastMajorDisasterYear?: number
+  lastMassExtinctionYear?: number
 }
 
 export const DISASTER_LABELS: Record<DisasterType, string> = {

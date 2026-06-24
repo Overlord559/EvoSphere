@@ -349,6 +349,7 @@ interface SimulationStore {
   setAutoPace: (enabled: boolean) => void
   injectDisaster: (type: DisasterType, severity: string) => void
   injectRandomDisaster: () => void
+  setDisasterSettings: (partial: Partial<import('../simulation/config/disasterConfig').DisasterSettings>) => void
   deepTimeYears: (years: number) => Promise<DeepTimeSummary | null>
   cancelDeepTime: () => void
   advanceAnimation: (deltaMs: number) => void
@@ -949,6 +950,12 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
       return
     }
     engine.injectRandomDisaster()
+    get().syncFromEngine()
+  },
+
+  setDisasterSettings: (partial) => {
+    const { engine } = get()
+    engine.getDisasterSystem().setSettings(partial)
     get().syncFromEngine()
   },
 

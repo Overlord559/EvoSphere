@@ -111,6 +111,42 @@ DisasterSystem
 
 Disasters alter real simulation state — drought lowers water, wildfire burns biomass, ice pulse shifts biomes where feasible.
 
+## Abiotic Terrain vs Biotic Ecosystem (v0.5.4)
+
+| Field | Role |
+|-------|------|
+| `tile.terrain` | Abiotic substrate at worldgen (barren, basin, fertile_plain, ocean, …) |
+| `tile.ecosystem` | Life-created overlay (`none` → grassland/forest/swamp via succession) |
+| `tile.successionStage` | Ecological stage (microbial → mature) |
+| `tile.disturbanceLevel` | Disaster/overgrazing regression pressure |
+
+Worldgen never assigns forest/grassland/swamp/marsh as terrain. `visualTerrainForTile()` merges ecosystem for rendering.
+
+## Ecological Succession (v0.5.4)
+
+`ecology/succession.ts` — producer biomass, water, stability, herbivory, disturbance drive ecosystem emergence. Throttled events: `ecology.biome_emerged`, `ecology.forest_emerged`, etc.
+
+## Disaster Pacing + Safe Mode (v0.5.4)
+
+`config/disasterConfig.ts` — frequency rare/normal/harsh/chaos/manual_only, mass extinctions very rare, refugia preserved in safe mode, natural roll every 1000 ticks with early-life protection.
+
+## Proto-Cognition (v0.5.4)
+
+```
+MobileAgent
+  ├── controller (NeuralController) — fixed-size weights + learned bias
+  ├── memory (AgentMemory) — food/danger/preferences
+  └── goalFromController() blends with utility behavior
+
+SpeciesRegistry.memoryStore — species-level habitat learning
+```
+
+No external AI. Reinforcement on meaningful events only.
+
+## Speciation Pipeline (v0.5.4)
+
+Variant → subspecies → species via `evaluateBranchCandidate()` — local fitness, founder group, establishment grace, failed variants marked quietly.
+
 ## Origin Profiles (v0.5.3)
 
 Each generated world stores `world.originProfile` with founder tile IDs, biome types, energy sources, and explanation for Briefing/event log. Same seed → same profile; different seeds → varied origins.

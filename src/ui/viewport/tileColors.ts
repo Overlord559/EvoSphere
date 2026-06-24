@@ -1,9 +1,14 @@
-import type { OverlayMode, Tile, TerrainType } from '../../types/simulation'
+import type { OverlayMode, Tile, TerrainType, EcosystemType } from '../../types/simulation'
 
 const TERRAIN_COLORS: Record<TerrainType, number> = {
   deep_ocean: 0x0c2d48,
   ocean: 0x1a5276,
   coast: 0xc2b280,
+  sand: 0xd4c4a0,
+  rock: 0x8a8078,
+  barren: 0xa89878,
+  basin: 0x7a9088,
+  fertile_plain: 0x9aab6a,
   grassland: 0x6aaf3d,
   forest: 0x2d6a4f,
   desert: 0xd4a574,
@@ -62,6 +67,34 @@ export interface TileColorContext {
   activityTiles?: Set<number>
 }
 
+export function visualTerrainForTile(tile: Tile): TerrainType {
+  switch (tile.ecosystem) {
+    case 'grassland':
+      return 'grassland'
+    case 'forest':
+      return 'forest'
+    case 'swamp':
+      return 'swamp'
+    case 'marsh':
+      return 'marsh'
+    case 'moss_field':
+      return 'fertile_plain'
+    case 'microbial_mat':
+      return tile.water > 0.45 ? 'coast' : 'barren'
+    case 'algae_bloom':
+    case 'kelp_coast':
+    case 'reef':
+      return tile.terrain === 'coast' ? 'coast' : 'ocean'
+    default:
+      return tile.terrain
+  }
+}
+
+export function ecosystemLabel(eco: EcosystemType): string {
+  if (eco === 'none') return 'none'
+  return eco.replace(/_/g, ' ')
+}
+
 export function colorForTile(
   tile: Tile,
   overlay: OverlayMode,
@@ -69,7 +102,7 @@ export function colorForTile(
 ): number {
   switch (overlay) {
     case 'terrain':
-      return colorForTerrain(tile.terrain)
+      return colorForTerrain(visualTerrainForTile(tile))
     case 'elevation':
       return gradientColor(
         [

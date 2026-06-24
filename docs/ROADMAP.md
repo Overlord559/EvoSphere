@@ -147,6 +147,18 @@
 - [x] Behavior integration — utility goals use senses + fitness + predator pressure
 - [x] Stability QA gate script — Standard 192×192 all speed modes + deep time smoke test
 
+## v0.5.4 — Proto-Cognition + Ecological Succession + Adaptive Radiation ✅ (current)
+
+- [x] Abiotic substrate vs biotic ecosystem tile fields
+- [x] Worldgen — no forest/grassland/swamp/marsh at birth
+- [x] Ecological succession — `ecology/succession.ts`
+- [x] Disaster pacing + safe mode — `config/disasterConfig.ts`
+- [x] Bottleneck recovery + adaptive radiation
+- [x] Variant → subspecies → species speciation pipeline
+- [x] Proto-cognition — `cognition/NeuralController.ts`, learning, species memory
+- [x] UI — Briefing succession/recovery, Species variants, Inspector cognition, disaster controls
+- [x] QA — `qa:succession`, `qa:evolution`
+
 ## v0.6 Communication + Memory + Social Behavior (next)
 
 - [ ] Proto-communication signals between agents

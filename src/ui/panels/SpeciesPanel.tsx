@@ -15,7 +15,16 @@ export function SpeciesPanel() {
   const agents = useSimulationStore((s) => s.snapshot.agents)
   const selectionProfiles = agents.speciesSelectionProfiles
 
-  const aliveSpecies = life.species.filter((s) => s.population > 0)
+  const stableSpecies = life.species.filter(
+    (s) =>
+      s.population > 0 &&
+      s.establishmentStatus !== 'failed' &&
+      (s.taxonRank === 'species' || s.taxonRank === 'subspecies' || s.isFounderLineage),
+  )
+  const emergingVariants = life.species.filter(
+    (s) => s.taxonRank === 'variant' && s.establishmentStatus === 'emerging' && s.population > 0,
+  )
+  const aliveSpecies = stableSpecies
   const selectedRecord = selectedSpeciesId
     ? life.species.find((s) => s.id === selectedSpeciesId)
     : null
@@ -49,7 +58,10 @@ export function SpeciesPanel() {
           <p className="text-violet-300">SELECTED — {selectedRecord.name}</p>
           <dl className="mt-2 space-y-1">
             <Row label="Kind" value={lifeKindLabel(selectedRecord.kind)} />
-            <Row label="Trophic role" value={selectedRecord.trophicRole} />
+            <Row label="Taxon rank" value={selectedRecord.taxonRank} />
+            <Row label="Establishment" value={selectedRecord.establishmentStatus} />
+            <Row label="Local fitness" value={selectedRecord.localFitnessScore.toFixed(2)} />
+            <Row label="Memory score" value={selectedRecord.speciesMemoryScore.toFixed(2)} />
             <Row label="Population" value={String(selectedRecord.population)} />
             <Row label="Biomass" value={selectedRecord.totalBiomass.toFixed(1)} />
             <Row label="Occupied tiles" value={String(selectedOccupancy?.occupiedTileCount ?? 0)} />
@@ -170,6 +182,20 @@ export function SpeciesPanel() {
           })}
         </ul>
       </div>
+
+      {emergingVariants.length > 0 && (
+        <div>
+          <p className="mb-2 font-mono text-xs text-slate-500">EMERGING VARIANTS</p>
+          <ul className="max-h-32 space-y-1 overflow-y-auto font-mono text-[10px] text-slate-400">
+            {emergingVariants.map((v) => (
+              <li key={v.id} className="flex justify-between gap-2">
+                <span>{v.name}</span>
+                <span>{v.population} pop · {v.adaptedClimate ?? 'local fit'}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

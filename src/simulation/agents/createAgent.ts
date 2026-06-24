@@ -1,10 +1,13 @@
 import { nanoid } from 'nanoid'
 import type { AgentKind, MobileAgent, MobileGenome } from '../../types/agents'
 import { trophicRoleForKind } from '../../types/agents'
+import { createEmptyAgentMemory } from '../cognition/agentLearning'
+import { createRandomController } from '../cognition/NeuralController'
 import { deriveBodyPlan } from '../bodyPlan/bodyPlanGenome'
 import { sanitizeBodyPlan } from '../bodyPlan/bodyPlanMutation'
 import { createBaseMobileGenome } from '../genetics/agentGenome'
 import { deriveSensoryProfile } from '../senses/SenseSystem'
+import { forkRng } from '../../utils/rng'
 
 function baseBiomass(kind: AgentKind): number {
   switch (kind) {
@@ -25,10 +28,12 @@ export function createAgent(
   genome: MobileGenome,
   generation = 0,
   bodyPlanOverride?: import('../../types/bodyPlan').BodyPlan,
+  controllerSeed?: string,
 ): MobileAgent {
   const maxAge = Math.round(genome.lifespan * (0.85 + generation * 0.015))
   const bodyPlan = sanitizeBodyPlan(bodyPlanOverride ?? deriveBodyPlan(kind, genome))
   const senses = deriveSensoryProfile(genome, bodyPlan)
+  const rng = forkRng(controllerSeed ?? kind, `ctrl-${x}-${y}-${generation}`)
   return {
     id: nanoid(),
     speciesId,
@@ -54,6 +59,8 @@ export function createAgent(
     environmentalFitness: 0.5,
     lastAction: 'idle',
     biomass: baseBiomass(kind) * (0.85 + genome.energyEfficiency * 0.35),
+    controller: createRandomController(() => rng(), 0.32),
+    memory: createEmptyAgentMemory(),
   }
 }
 

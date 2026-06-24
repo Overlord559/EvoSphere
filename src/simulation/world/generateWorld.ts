@@ -38,7 +38,7 @@ function computeWater(elevation: number, moisture: number, terrain: TerrainType)
   if (terrain === 'deep_ocean' || terrain === 'ocean') return 1
   if (terrain === 'river') return 0.85
   if (terrain === 'coast') return 0.55 + moisture * 0.2
-  if (terrain === 'swamp') return 0.65 + moisture * 0.25
+  if (terrain === 'basin') return 0.65 + moisture * 0.25
   if (elevation < SEA_LEVEL) return 0.9
   return moisture * (1 - elevation) * 0.35
 }
@@ -55,7 +55,7 @@ function computeSoilFertility(
   if (terrain === 'desert' || terrain === 'mountain' || terrain === 'volcanic' || terrain === 'snow') {
     return 0.15
   }
-  if (terrain === 'river' || terrain === 'swamp' || terrain === 'marsh' || terrain === 'coast') {
+  if (terrain === 'river' || terrain === 'basin' || terrain === 'coast') {
     return 0.55 + moisture * 0.25
   }
   const tempFactor = 1 - Math.abs(temperature - 0.55) * 1.2
@@ -89,10 +89,14 @@ function classifyLandTerrain(
   if (temperature < 0.2) return 'tundra'
   if (temperature < 0.32 && elevation > 0.55) return 'snow'
   if (moisture < 0.18 && temperature > 0.42) return 'desert'
-  if (moisture > 0.78 && elevation < SEA_LEVEL + 0.1 && temperature > 0.38) return 'marsh'
-  if (moisture > 0.68 && elevation < SEA_LEVEL + 0.14 && temperature > 0.45) return 'swamp'
-  if (moisture > 0.48) return 'forest'
-  return 'grassland'
+  // Wet lowlands — abiotic basin (marsh/swamp emerge via succession)
+  if (moisture > 0.72 && elevation < SEA_LEVEL + 0.12) return 'basin'
+  if (moisture > 0.55 && elevation < SEA_LEVEL + 0.18) return 'basin'
+  // Rocky / sandy barren — fertile plains for pioneer life
+  if (moisture < 0.28 && elevation > 0.5) return 'rock'
+  if (moisture < 0.22) return 'sand'
+  if (moisture > 0.38 && temperature > 0.4) return 'fertile_plain'
+  return 'barren'
 }
 
 function classifyAquaticTerrain(elevation: number): TerrainType {
@@ -324,6 +328,10 @@ function gridToTiles(
           x,
           y,
           terrain: 'void',
+          ecosystem: 'none',
+          successionStage: 'none',
+          successionStability: 0,
+          disturbanceLevel: 0,
           elevation: 0,
           moisture: 0,
           temperature: 0,
@@ -345,6 +353,10 @@ function gridToTiles(
         x,
         y,
         terrain,
+        ecosystem: 'none',
+        successionStage: 'none',
+        successionStability: 0,
+        disturbanceLevel: 0,
         elevation,
         moisture,
         temperature,

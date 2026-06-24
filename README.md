@@ -2,9 +2,20 @@
 
 Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, mobile agents with predation, circular planet viewport, and Spore-inspired procedural Pixi rendering.
 
-**Current phase:** v0.5.3 Deep-Time Pacing + Camera/Selection + Procedural World Variety + Cataclysms
+**Current phase:** v0.5.4 Proto-Cognition + Ecological Succession + Adaptive Radiation
 
 ## Status
+
+v0.5.4 proto-cognition + ecological succession + adaptive radiation (2026-06-24):
+
+- **Abiotic vs biotic split** — worldgen spawns barren/fertile/basin substrates; forests/grasslands/swamps emerge via succession only
+- **Ecological succession** — `ecology/succession.ts` transforms tiles from producer biomass, water, stability, disturbance
+- **Disaster pacing + safe mode** — rare/normal/harsh/chaos/manual; refugia preserved; mass extinctions very rare by default
+- **Bottleneck recovery + adaptive radiation** — stagnation detection, recovery modifiers, local-fitness speciation
+- **Variant → subspecies → species** — establishment grace, failed variants quiet, survival-biased branching
+- **Proto-cognition** — tiny inheritable neural controllers, agent memory, species memory, reinforcement on meaningful events
+- **UI** — Briefing succession/recovery/cognition; Species stable vs variants; Inspector cognition card; disaster frequency controls
+- **QA** — `npm run qa:succession` · `npm run qa:evolution` added
 
 v0.5.3 deep-time pacing + camera/selection + world variety + cataclysms (2026-06-24):
 
@@ -96,6 +107,8 @@ npm run qa:performance
 npm run qa:crash-repro
 npm run qa:longrun
 npm run qa:worldgen
+npm run qa:succession
+npm run qa:evolution
 ```
 
 ## Manual browser QA (v0.5.2b)

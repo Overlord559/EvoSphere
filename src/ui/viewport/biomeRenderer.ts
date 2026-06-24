@@ -1,6 +1,6 @@
 import { Graphics } from 'pixi.js'
 import type { OverlayMode, Tile, TerrainType } from '../../types/simulation'
-import { colorForTile, type TileColorContext } from './tileColors'
+import { colorForTile, visualTerrainForTile, type TileColorContext } from './tileColors'
 import { hash01, hashAngle, hashRange } from './visualHash'
 import { pulseAlpha, seasonTint, shimmerOffset } from './animationLayer'
 
@@ -32,7 +32,8 @@ function drawBiomeTexture(
   baseColor: number,
   animPhaseMs = 0,
 ): void {
-  const { x, y, terrain } = tile
+  const { x, y } = tile
+  const terrain = visualTerrainForTile(tile)
   const detail = tileSize >= 8
 
   switch (terrain) {
@@ -87,6 +88,27 @@ function drawBiomeTexture(
           adjustColor(baseColor, -15, -10, -5),
           0.15,
         )
+      }
+      break
+    }
+    case 'barren':
+    case 'sand':
+    case 'rock':
+    case 'basin':
+    case 'fertile_plain': {
+      g.rect(px, py, tileSize, tileSize)
+      g.fill(baseColor)
+      if (terrain === 'fertile_plain' && detail) {
+        for (let i = 0; i < 3; i++) {
+          drawOrganicPatch(
+            g,
+            px + hashRange(x, y, 200 + i, 0.1, 0.9) * tileSize,
+            py + hashRange(x, y, 210 + i, 0.5, 0.95) * tileSize,
+            tileSize * 0.05,
+            adjustColor(baseColor, -10, 5, -8),
+            0.2,
+          )
+        }
       }
       break
     }
@@ -360,6 +382,11 @@ export function terrainAccentColor(terrain: TerrainType): number {
     deep_ocean: 0x0c2d48,
     ocean: 0x1a5276,
     coast: 0xc2b280,
+    sand: 0xd4c4a0,
+    rock: 0x8a8078,
+    barren: 0xa89878,
+    basin: 0x7a9088,
+    fertile_plain: 0x9aab6a,
     grassland: 0x6aaf3d,
     forest: 0x2d6a4f,
     desert: 0xd4a574,

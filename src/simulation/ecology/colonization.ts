@@ -1,24 +1,29 @@
 import type { Genome, LifeKind } from '../../types/life'
-import type { Tile, TerrainType } from '../../types/simulation'
+import type { Tile } from '../../types/simulation'
+import { effectiveHabitatTerrain } from '../world/terrainHelpers'
 import { environmentalStress } from './energy'
 
-const LAND_TERRAINS = new Set<TerrainType>([
-  'grassland',
-  'forest',
+const LAND_SUBSTRATES = new Set([
+  'barren',
+  'sand',
+  'rock',
+  'fertile_plain',
+  'basin',
   'desert',
   'mountain',
   'tundra',
-  'swamp',
   'coast',
   'volcanic',
+  'snow',
 ])
 
-const WATER_TERRAINS = new Set<TerrainType>([
+const WATER_TERRAINS = new Set([
   'ocean',
   'coast',
   'river',
   'deep_ocean',
   'hydrothermal_vent',
+  'basin',
 ])
 
 export function tileCarryingCapacity(kind: LifeKind, tile: Tile): number {
@@ -35,14 +40,19 @@ export function tileCarryingCapacity(kind: LifeKind, tile: Tile): number {
       base = tile.water > 0.25 && tile.terrain !== 'deep_ocean' ? 3 : 1
       break
     case 'Algae':
-      base = WATER_TERRAINS.has(tile.terrain) && tile.water > 0.35 ? 4 : 0
+      base =
+        (WATER_TERRAINS.has(tile.terrain) || tile.ecosystem === 'algae_bloom') && tile.water > 0.35
+          ? 4
+          : 0
       break
     case 'PrimitivePlant':
       base =
-        LAND_TERRAINS.has(tile.terrain) &&
+        (LAND_SUBSTRATES.has(tile.terrain) ||
+          tile.ecosystem === 'grassland' ||
+          tile.ecosystem === 'moss_field') &&
         tile.terrain !== 'mountain' &&
         tile.terrain !== 'desert' &&
-        tile.soilFertility > 0.25
+        tile.soilFertility > 0.2
           ? 3
           : 0
       break
@@ -72,6 +82,7 @@ function createNeutralGenome(): Genome {
 
 export function habitatSuitability(kind: LifeKind, tile: Tile, genome: Genome): number {
   if (tile.terrain === 'void') return 0
+  const habitat = effectiveHabitatTerrain(tile)
   const stress = environmentalStress(tile, genome)
   if (stress > 0.95) return 0
 
@@ -84,10 +95,18 @@ export function habitatSuitability(kind: LifeKind, tile: Tile, genome: Genome): 
       if (tile.terrain === 'deep_ocean' || tile.terrain === 'mountain') return 0
       return (tile.water * 0.5 + (1 - stress) * 0.5) * genome.lightUse
     case 'Algae':
-      if (!WATER_TERRAINS.has(tile.terrain) || tile.water < 0.3) return 0
+      if ((!WATER_TERRAINS.has(tile.terrain) && tile.ecosystem !== 'algae_bloom') || tile.water < 0.3) return 0
       return (tile.water * 0.6 + (1 - stress) * 0.4) * genome.lightUse
     case 'PrimitivePlant':
-      if (!LAND_TERRAINS.has(tile.terrain) || tile.terrain === 'desert') return 0
+      if (
+        !LAND_SUBSTRATES.has(tile.terrain) &&
+        habitat !== 'grassland' &&
+        habitat !== 'forest' &&
+        tile.ecosystem !== 'moss_field'
+      ) {
+        return 0
+      }
+      if (tile.terrain === 'desert') return 0
       return (tile.soilFertility * 0.55 + tile.water * 0.25 + (1 - stress) * 0.2) * genome.lightUse
     default:
       return Math.max(0, 0.5 - stress)

@@ -4,6 +4,17 @@ import type { AgentSystem } from '../agents/AgentSystem'
 import type { LifeSystem } from '../life/LifeSystem'
 import { forkRng, randomInt } from '../../utils/rng'
 import {
+  DEFAULT_DISASTER_SETTINGS,
+  GLOBAL_DISASTER_TYPES,
+  MASS_EXTINCTION_TYPES,
+  type DisasterSettings,
+  massExtinctionChanceMultiplier,
+  naturalDisasterChancePer1kTicks,
+} from '../config/disasterConfig'
+import { tickToYears } from '../engine/simTime'
+import { addTileDisturbance } from '../ecology/succession'
+import { isRefugiaTile } from '../evolution/bottleneckRecovery'
+import {
   type ActiveDisaster,
   type DisasterSeverity,
   type DisasterSnapshot,
@@ -22,19 +33,32 @@ import {
 
 export type DisasterEventEmitter = (type: string, message: string) => void
 
-const MAX_ACTIVE_DISASTERS = 4
 const MAX_RECENT_ENDED = 6
 const DISASTER_EVENT_COOLDOWN = 8
+
+const NON_GLOBAL_TYPES = ALL_DISASTER_TYPES.filter((t) => !GLOBAL_DISASTER_TYPES.has(t))
 
 export class DisasterSystem {
   private active: ActiveDisaster[] = []
   private recentEnded: ActiveDisaster[] = []
   private tileStress = new Map<number, { biomassBurn: number; mortality: number }>()
   private lastEventTick = 0
+  private lastMajorDisasterYear = 0
+  private lastMassExtinctionYear = 0
+  private settings: DisasterSettings
   private readonly seed: string
 
-  constructor(seed: string) {
+  constructor(seed: string, settings: DisasterSettings = DEFAULT_DISASTER_SETTINGS) {
     this.seed = seed
+    this.settings = { ...settings }
+  }
+
+  getSettings(): DisasterSettings {
+    return { ...this.settings }
+  }
+
+  setSettings(partial: Partial<DisasterSettings>): void {
+    this.settings = { ...this.settings, ...partial }
   }
 
   reset(): void {
@@ -42,6 +66,8 @@ export class DisasterSystem {
     this.recentEnded = []
     this.tileStress.clear()
     this.lastEventTick = 0
+    this.lastMajorDisasterYear = 0
+    this.lastMassExtinctionYear = 0
   }
 
   getSnapshot(): DisasterSnapshot {
@@ -50,6 +76,9 @@ export class DisasterSystem {
       active: this.active.map((d) => ({ ...d, affectedTileIds: [...d.affectedTileIds] })),
       recentEnded: [...this.recentEnded],
       stressTileIds,
+      settings: this.getSettings(),
+      lastMajorDisasterYear: this.lastMajorDisasterYear,
+      lastMassExtinctionYear: this.lastMassExtinctionYear,
     }
   }
 
@@ -67,26 +96,36 @@ export class DisasterSystem {
     type: DisasterType,
     severityValue: number,
     emit: DisasterEventEmitter,
+    manual = true,
   ): ActiveDisaster | null {
-    if (this.active.length >= MAX_ACTIVE_DISASTERS) return null
-    const severity = severityFromValue(severityValue)
-    const region = selectDisasterRegion(world, `${this.seed}-${tick}-${type}`, type, severityValue)
+    if (this.active.length >= this.settings.maximumActiveDisasters) return null
+
+    let cappedSeverity = severityValue
+    if (!manual && this.settings.disasterSafeMode) {
+      cappedSeverity = Math.min(cappedSeverity, 0.72)
+    }
+    if (!manual && MASS_EXTINCTION_TYPES.has(type) && this.settings.massExtinctionFrequency === 'very_rare') {
+      cappedSeverity = Math.min(cappedSeverity, 0.55)
+    }
+
+    const severity = severityFromValue(cappedSeverity)
+    const region = selectDisasterRegion(world, `${this.seed}-${tick}-${type}`, type, cappedSeverity)
     if (region.affectedTileIds.length === 0) return null
 
     const disaster: ActiveDisaster = {
       id: nanoid(),
       type,
       severity,
-      severityValue,
+      severityValue: cappedSeverity,
       startTick: tick,
-      durationTicks: disasterDurationTicks(type, severityValue),
+      durationTicks: disasterDurationTicks(type, cappedSeverity),
       affectedTileIds: region.affectedTileIds,
       centerX: region.centerX,
       centerY: region.centerY,
       radius: region.radius,
-      effectSummary: disasterEffectSummary(type, severityValue, region.affectedTileIds.length),
-      lifeImpact: this.lifeImpactLabel(type, severityValue),
-      agentImpact: this.agentImpactLabel(type, severityValue),
+      effectSummary: disasterEffectSummary(type, cappedSeverity, region.affectedTileIds.length),
+      lifeImpact: this.lifeImpactLabel(type, cappedSeverity),
+      agentImpact: this.agentImpactLabel(type, cappedSeverity),
       biomeImpact: this.biomeImpactLabel(type),
     }
 
@@ -97,6 +136,9 @@ export class DisasterSystem {
       `${DISASTER_LABELS[type]} began — ${disaster.effectSummary}. ${disaster.lifeImpact}`,
     )
     this.lastEventTick = tick
+    const yr = tickToYears(tick)
+    if (cappedSeverity >= 0.55) this.lastMajorDisasterYear = yr
+    if (MASS_EXTINCTION_TYPES.has(type)) this.lastMassExtinctionYear = yr
     return disaster
   }
 
@@ -104,7 +146,57 @@ export class DisasterSystem {
     const rng = forkRng(this.seed, `disaster-random-${tick}`)
     const type = ALL_DISASTER_TYPES[randomInt(rng, 0, ALL_DISASTER_TYPES.length - 1)]
     const severityValue = 0.25 + rng() * 0.65
-    return this.injectDisaster(world, tick, type, severityValue, emit)
+    return this.injectDisaster(world, tick, type, severityValue, emit, true)
+  }
+
+  /** Natural disaster roll — rare by default, era-scaled, cooldown-guarded. */
+  maybeTriggerNaturalDisaster(
+    world: World,
+    tick: number,
+    worldAgeYears: number,
+    emit: DisasterEventEmitter,
+    suppressMinorEvents = false,
+  ): void {
+    if (!this.settings.disasterEnabled) return
+    if (this.settings.naturalDisasterFrequency === 'manual_only') return
+    if (this.active.length >= this.settings.maximumActiveDisasters) return
+
+    const rng = forkRng(this.seed, `natural-disaster-${tick}`)
+    const baseChance = naturalDisasterChancePer1kTicks(this.settings.naturalDisasterFrequency)
+
+    // Early life protection — fewer severe events in first 200 years
+    const earlyLifeFactor = worldAgeYears < 200 ? 0.35 : worldAgeYears < 500 ? 0.65 : 1
+
+    const majorCooldownOk =
+      worldAgeYears - this.lastMajorDisasterYear >= this.settings.minimumYearsBetweenMajorDisasters
+    const massCooldownOk =
+      worldAgeYears - this.lastMassExtinctionYear >= this.settings.minimumYearsBetweenMassExtinctions
+
+    if (rng() > baseChance * earlyLifeFactor) return
+
+    let type: DisasterType
+    let severityValue = 0.22 + rng() * 0.45
+
+    const massRoll = rng() * massExtinctionChanceMultiplier(this.settings.massExtinctionFrequency)
+    if (massRoll > 0.92 && massCooldownOk && worldAgeYears > 300) {
+      type = MASS_EXTINCTION_TYPES.has('asteroid_impact')
+        ? 'asteroid_impact'
+        : (['volcanic_winter', 'ice_age_pulse', 'oxygen_crash'] as DisasterType[])[
+            randomInt(rng, 0, 2)
+          ]
+      severityValue = this.settings.disasterSafeMode ? 0.5 + rng() * 0.25 : 0.65 + rng() * 0.3
+    } else {
+      type = NON_GLOBAL_TYPES[randomInt(rng, 0, NON_GLOBAL_TYPES.length - 1)] ?? 'storm'
+      if (!majorCooldownOk) severityValue = Math.min(severityValue, 0.42)
+    }
+
+    if (this.settings.disasterSafeMode) {
+      severityValue = Math.min(severityValue, 0.68)
+    }
+
+    if (!suppressMinorEvents) {
+      this.injectDisaster(world, tick, type, severityValue, emit, false)
+    }
   }
 
   tick(
@@ -116,6 +208,10 @@ export class DisasterSystem {
     suppressMinorEvents = false,
   ): void {
     this.tileStress.clear()
+
+    if (tick % 1000 === 0 && !suppressMinorEvents) {
+      this.maybeTriggerNaturalDisaster(world, tick, tickToYears(tick), emit, suppressMinorEvents)
+    }
 
     const stillActive: ActiveDisaster[] = []
     for (const disaster of this.active) {
@@ -167,9 +263,24 @@ export class DisasterSystem {
     for (const idx of disaster.affectedTileIds) {
       const tile = world.tiles[idx]
       if (!tile || tile.terrain === 'void') continue
+
+      if (this.settings.disasterSafeMode && isRefugiaTile(world, idx)) {
+        const d = Math.hypot(tile.x - centerX, tile.y - centerY)
+        const stress = tileStressForDisaster(disaster.type, disaster.severityValue * 0.35, tile, d, radius)
+        applyTileStress(tile, stress)
+        addTileDisturbance(world, idx, stress.mortalityPressure * 0.15)
+        const prev = this.tileStress.get(idx) ?? { biomassBurn: 0, mortality: 0 }
+        this.tileStress.set(idx, {
+          biomassBurn: Math.max(prev.biomassBurn, stress.biomassBurn * 0.4),
+          mortality: Math.max(prev.mortality, stress.mortalityPressure * 0.35),
+        })
+        continue
+      }
+
       const d = Math.hypot(tile.x - centerX, tile.y - centerY)
       const stress = tileStressForDisaster(disaster.type, disaster.severityValue, tile, d, radius)
       applyTileStress(tile, stress)
+      addTileDisturbance(world, idx, stress.mortalityPressure * 0.25 + stress.biomassBurn * 0.1)
 
       const prev = this.tileStress.get(idx) ?? { biomassBurn: 0, mortality: 0 }
       this.tileStress.set(idx, {
@@ -189,9 +300,21 @@ export class DisasterSystem {
     suppress: boolean,
   ): void {
     let deaths = 0
+    let refugiaSurvived = 0
     for (const idx of disaster.affectedTileIds) {
       const burn = this.tileStress.get(idx)?.biomassBurn ?? 0
-      const mortality = this.tileStress.get(idx)?.mortality ?? 0
+      let mortality = this.tileStress.get(idx)?.mortality ?? 0
+
+      if (this.settings.disasterSafeMode && isRefugiaTile(world, idx)) {
+        mortality *= 0.35
+        refugiaSurvived += 1
+      }
+
+      // Never wipe all life unless catastrophic manual injection
+      if (this.settings.disasterSafeMode && disaster.severityValue < 0.85) {
+        mortality = Math.min(mortality, 0.55)
+      }
+
       if (burn > 0.1) {
         deaths += life.applyBiomassStress(world, idx, burn)
       }
@@ -199,6 +322,14 @@ export class DisasterSystem {
         deaths += life.applyMortalityPressure(world, idx, mortality * 0.08)
         agents.applyMortalityPressure(world, idx, mortality * 0.12)
       }
+    }
+
+    if (!suppress && refugiaSurvived > 0 && tick - this.lastEventTick >= DISASTER_EVENT_COOLDOWN) {
+      emit(
+        'evolution.refugia_survived',
+        `${refugiaSurvived} refugia tiles preserved life during ${DISASTER_LABELS[disaster.type]} (safe mode).`,
+      )
+      this.lastEventTick = tick
     }
 
     if (
@@ -233,7 +364,7 @@ export class DisasterSystem {
       case 'drought':
         return `Water and fertility reduced up to ${pct}% on dry tiles.`
       case 'wildfire':
-        return `Plant biomass burning in forests and grasslands.`
+        return `Plant biomass burning in forest/grassland ecosystems.`
       case 'flood':
       case 'tsunami':
         return `Lowland life stressed by inundation.`
@@ -254,15 +385,15 @@ export class DisasterSystem {
   private biomeImpactLabel(type: DisasterType): string {
     switch (type) {
       case 'ice_age_pulse':
-        return 'Cold expansion into valleys; grassland → tundra where sustained.'
+        return 'Cold expansion into valleys; succession may regress.'
       case 'volcanic_winter':
         return 'Global cooling; reduced photosynthesis in high latitudes.'
       case 'flood':
-        return 'Lowlands become marsh; coasts saturated.'
+        return 'Lowlands saturated; marsh succession may advance when biomass returns.'
       case 'asteroid_impact':
-        return 'Regional devastation; possible global cooling fringe.'
+        return 'Regional devastation; refugia may preserve lineages in safe mode.'
       default:
-        return 'Temporary terrain attribute shifts on affected tiles.'
+        return 'Temporary terrain attribute shifts; ecological succession may regress.'
     }
   }
 }

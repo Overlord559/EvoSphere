@@ -5,22 +5,57 @@ import type { BriefingSnapshot, DeepTimeSummary } from './runtime'
 export type { LifeSnapshot } from './life'
 export type { BriefingSnapshot, DeepTimeSummary, DeepTimeProgress, RuntimeState, SimSpeed, SelectedSpeciesBriefing, LatestDevelopment, AgentVisualState } from './runtime'
 
-export type TerrainType =
+/** Abiotic substrate at world birth — life does not paint these as mature biomes. */
+export type AbioticTerrainType =
   | 'deep_ocean'
   | 'ocean'
   | 'coast'
-  | 'grassland'
-  | 'forest'
+  | 'sand'
+  | 'rock'
+  | 'barren'
+  | 'basin'
+  | 'fertile_plain'
   | 'desert'
   | 'mountain'
   | 'river'
   | 'tundra'
   | 'snow'
-  | 'swamp'
-  | 'marsh'
   | 'volcanic'
   | 'hydrothermal_vent'
   | 'void'
+
+/** Life-created ecological overlay — emerges via succession only. */
+export type EcosystemType =
+  | 'none'
+  | 'microbial_mat'
+  | 'algae_bloom'
+  | 'kelp_coast'
+  | 'moss_field'
+  | 'grassland'
+  | 'forest'
+  | 'swamp'
+  | 'marsh'
+  | 'fungal_zone'
+  | 'reef'
+
+export type SuccessionStage =
+  | 'none'
+  | 'microbial'
+  | 'algal'
+  | 'pioneer_plants'
+  | 'grassland'
+  | 'forest'
+  | 'swamp'
+  | 'marsh'
+  | 'mature'
+
+/** Display / legacy union — abiotic + biotic names for overlays and compatibility. */
+export type TerrainType =
+  | AbioticTerrainType
+  | 'grassland'
+  | 'forest'
+  | 'swamp'
+  | 'marsh'
 
 export interface OriginProfile {
   originProfileName: string
@@ -42,7 +77,16 @@ export interface OriginFounderSite {
 export interface Tile {
   x: number
   y: number
+  /** Abiotic substrate — set at worldgen, not replaced by succession. */
   terrain: TerrainType
+  /** Biological/ecological overlay created by life. */
+  ecosystem: EcosystemType
+  /** Ecological succession stage on this tile. */
+  successionStage: SuccessionStage
+  /** Ticks of stable producer biomass at current stage. */
+  successionStability: number
+  /** Disturbance from disasters, overgrazing, etc. (0–1). */
+  disturbanceLevel: number
   elevation: number
   moisture: number
   temperature: number

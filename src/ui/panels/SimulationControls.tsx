@@ -4,6 +4,7 @@ import type { SimSpeed } from '../../types/runtime'
 import type { WorldSizePreset } from '../../types/simulation'
 import { WORLD_SIZE_PRESETS } from '../../simulation/world/worldSizePresets'
 import { formatSimYears, buildSimTimeDisplay } from '../../simulation/engine/simTime'
+import type { NaturalDisasterFrequency } from '../../simulation/config/disasterConfig'
 import { ALL_DISASTER_TYPES, DISASTER_LABELS } from '../../simulation/disasters/DisasterTypes'
 import type { DisasterType } from '../../simulation/disasters/DisasterTypes'
 import { PerformanceDebugTable } from './PerformanceDebugTable'
@@ -44,6 +45,7 @@ export function SimulationControls() {
   const setAutoPace = useSimulationStore((s) => s.setAutoPace)
   const injectDisaster = useSimulationStore((s) => s.injectDisaster)
   const injectRandomDisaster = useSimulationStore((s) => s.injectRandomDisaster)
+  const setDisasterSettings = useSimulationStore((s) => s.setDisasterSettings)
   const deepTimeYears = useSimulationStore((s) => s.deepTimeYears)
   const cancelDeepTime = useSimulationStore((s) => s.cancelDeepTime)
   const resetWorld = useSimulationStore((s) => s.resetWorld)
@@ -58,6 +60,9 @@ export function SimulationControls() {
   const [debugOpen, setDebugOpen] = useState(false)
   const [disasterType, setDisasterType] = useState<DisasterType>('wildfire')
   const [disasterSeverity, setDisasterSeverity] = useState<(typeof DISASTER_SEVERITIES)[number]>('moderate')
+  const disasterFreq =
+    snapshot.disasters?.settings?.naturalDisasterFrequency ?? 'normal'
+  const disasterSafeMode = snapshot.disasters?.settings?.disasterSafeMode ?? true
 
   const simTime = buildSimTimeDisplay(
     runtime.internalTick,
@@ -220,6 +225,32 @@ export function SimulationControls() {
 
       <div>
         <p className="mb-1.5 font-mono text-xs text-slate-500">NATURAL DISASTERS</p>
+        <div className="mb-2 flex flex-wrap items-center gap-1">
+          <select
+            value={disasterFreq}
+            onChange={(e) =>
+              setDisasterSettings({
+                naturalDisasterFrequency: e.target.value as NaturalDisasterFrequency,
+              })
+            }
+            className="rounded border border-command-border bg-command-bg px-2 py-1 font-mono text-xs text-slate-300"
+            title="Natural disaster frequency (manual inject always available)"
+          >
+            <option value="rare">Rare</option>
+            <option value="normal">Normal</option>
+            <option value="harsh">Harsh</option>
+            <option value="chaos">Chaos</option>
+            <option value="manual_only">Manual only</option>
+          </select>
+          <label className="flex items-center gap-1 font-mono text-[10px] text-slate-400">
+            <input
+              type="checkbox"
+              checked={disasterSafeMode}
+              onChange={(e) => setDisasterSettings({ disasterSafeMode: e.target.checked })}
+            />
+            Safe mode
+          </label>
+        </div>
         <div className="flex flex-wrap items-center gap-1">
           <select
             value={disasterType}

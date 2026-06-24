@@ -15,6 +15,7 @@ import {
 } from '../engine/simTime'
 import { buildLatestDevelopments } from '../engine/developments'
 import { buildSelectionNarratives } from '../species/speciesSelectionMetrics'
+import { computeSuccessionSnapshot } from '../ecology/succession'
 import type { World } from '../../types/simulation'
 
 export function buildBriefing(
@@ -82,6 +83,33 @@ export function buildBriefing(
     foodWebWarning = 'Ungulate bloom — no predation pressure'
   }
 
+  const succession = computeSuccessionSnapshot(world)
+  const settings = disasters.settings
+  let disasterPacingSummary: string | null = null
+  if (settings) {
+    const parts = [
+      `Frequency: ${settings.naturalDisasterFrequency}`,
+      `Mass extinctions: ${settings.massExtinctionFrequency}`,
+    ]
+    if (settings.disasterSafeMode) parts.push('Safe mode ON (refugia preserved)')
+    if (disasters.lastMajorDisasterYear != null && disasters.lastMajorDisasterYear > 0) {
+      parts.push(`Last major disaster ~yr ${disasters.lastMajorDisasterYear}`)
+    }
+    disasterPacingSummary = parts.join(' · ')
+  }
+
+  const mobileWithController = agents.agents.filter((a) => a.controller != null).length
+  const protoCognitionSummary =
+    mobileWithController > 0
+      ? `${mobileWithController} mobile agents with adaptive controllers · species memory active`
+      : null
+
+  const bottleneckEvent = events.find((e) => e.type === 'evolution.bottleneck_detected')
+  const recoveryEvent = events.find((e) => e.type === 'evolution.recovery_started')
+  let bottleneckStatus: string | null = null
+  if (recoveryEvent) bottleneckStatus = 'Recovery active — expansion pressure from refugia'
+  else if (bottleneckEvent) bottleneckStatus = 'Bottleneck detected — monitoring population spread'
+
   return {
     simulatedYear: tickToYears(tick),
     estimatedGenerations: tickToGenerations(tick),
@@ -114,6 +142,18 @@ export function buildBriefing(
     selectionNarratives: buildSelectionNarratives(agents.speciesSelectionProfiles, life.species),
     activeDisasters: disasters.active,
     originExplanation: world.originProfile?.explanation ?? null,
+    successionOverview: {
+      barrenPercent: succession.barrenPercent,
+      microbialPercent: succession.microbialPercent,
+      algalPercent: succession.algalPercent,
+      pioneerPercent: succession.pioneerPercent,
+      grasslandPercent: succession.grasslandPercent,
+      forestPercent: succession.forestPercent,
+      swampMarshPercent: succession.swampMarshPercent,
+    },
+    bottleneckStatus,
+    protoCognitionSummary,
+    disasterPacingSummary,
   }
 }
 

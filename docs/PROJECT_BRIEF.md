@@ -22,7 +22,21 @@ Evolution and emergence are fascinating but hard to explore interactively. Most 
 4. **Browser-first** — no install, no backend, IndexedDB for persistence later
 5. **Honest scope** — no fake data, no dead controls, no spectacle without substance
 
-## v0.5.3 Deep-Time Pacing + Camera/Selection + Procedural World Variety + Cataclysms ✅ (current)
+## v0.5.4 Proto-Cognition + Ecological Succession + Adaptive Radiation ✅ (current)
+
+Delivered:
+
+- Abiotic terrain vs biotic ecosystem split — worldgen barren substrates; life-created biomes via succession
+- Ecological succession module — microbial → algal → pioneer → grassland/forest/swamp/marsh
+- Disaster pacing + safe mode — rare default, refugia, mass extinction very rare, UI frequency controls
+- Bottleneck recovery + adaptive radiation — stagnation detection, recovery modifiers, local-fitness branching
+- Variant → subspecies → species pipeline with establishment grace
+- Proto-cognition — tiny neural controllers, agent/species memory, inherited learned bias
+- QA: `qa:succession`, `qa:evolution`
+
+Next phase: **v0.6 Communication + Social Learning** after browser soak.
+
+## v0.5.3 Deep-Time Pacing + Camera/Selection + Procedural World Variety + Cataclysms ✅
 
 Delivered:
 

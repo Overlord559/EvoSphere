@@ -82,12 +82,22 @@ export function applyPlanetEdgeClimate(tile: Tile, geometry: PlanetGeometry): vo
   tile.moisture = Math.min(1, tile.moisture + falloff * 0.12)
   if (falloff > 0.55 && tile.terrain !== 'mountain' && tile.terrain !== 'volcanic') {
     if (tile.elevation < 0.42) tile.terrain = 'ocean'
-    else if (tile.terrain === 'grassland' || tile.terrain === 'forest') tile.terrain = 'coast'
+    else if (
+      tile.terrain === 'fertile_plain' ||
+      tile.terrain === 'barren' ||
+      tile.terrain === 'basin'
+    ) {
+      tile.terrain = 'coast'
+    }
   }
 }
 
 export function markVoidTile(tile: Tile): void {
   tile.terrain = 'void'
+  tile.ecosystem = 'none'
+  tile.successionStage = 'none'
+  tile.successionStability = 0
+  tile.disturbanceLevel = 0
   tile.elevation = 0
   tile.moisture = 0
   tile.temperature = 0

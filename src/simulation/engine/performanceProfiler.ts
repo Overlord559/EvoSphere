@@ -9,6 +9,8 @@ export type ProfileCategory =
   | 'snapshotBuild'
   | 'briefingBuild'
   | 'stabilityGuards'
+  | 'disasterTick'
+  | 'successionTick'
   | 'renderRedraw'
   | 'workerMessage'
 

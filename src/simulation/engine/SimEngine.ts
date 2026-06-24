@@ -8,6 +8,15 @@ import type {
 import type { DeepTimeSummary, SimSpeed } from '../../types/runtime'
 import { AgentSystem } from '../agents/AgentSystem'
 import { DisasterSystem } from '../disasters/DisasterSystem'
+import { DEFAULT_DISASTER_SETTINGS } from '../config/disasterConfig'
+import { computeSuccessionSnapshot, tickSuccession } from '../ecology/succession'
+import {
+  createBottleneckState,
+  recoveryModifiers,
+  updateBottleneckDetection,
+  type BottleneckMetrics,
+  type BottleneckState,
+} from '../evolution/bottleneckRecovery'
 import type { DisasterType } from '../disasters/DisasterTypes'
 import { LifeSystem } from '../life/LifeSystem'
 import { generateWorld } from '../world/generateWorld'
@@ -69,13 +78,24 @@ export class SimEngine {
   private stabilityWarning: string | null = null
   private cachedBriefing: SimulationSnapshot['briefing'] | null = null
   private cachedBriefingTick = -1
+  private successionLastEventTick = 0
+  private bottleneckState: BottleneckState = createBottleneckState()
+  private prevBottleneckMetrics: BottleneckMetrics = {
+    totalPopulation: 0,
+    speciesCount: 0,
+    colonizedTiles: 0,
+    producerBiomass: 0,
+    dominantShare: 0,
+  }
+  private herbivoryPressure: number[] = []
 
   constructor(settings: SimulationSettings) {
     this.settings = { ...settings }
     this.world = generateWorld(this.settings)
     this.life = new LifeSystem(this.settings.seed, this.world)
     this.agents = new AgentSystem(this.settings.seed, this.world, this.life)
-    this.disasters = new DisasterSystem(this.settings.seed)
+    this.disasters = new DisasterSystem(this.settings.seed, DEFAULT_DISASTER_SETTINGS)
+    this.herbivoryPressure = new Array(this.world.width * this.world.height).fill(0)
     this.emitEvent(
       'world.generated',
       `World generated from seed "${this.settings.seed}" (${this.settings.worldWidth}×${this.settings.worldHeight}, planet r=${this.world.planetRadius.toFixed(1)}) — origin: ${this.world.originProfile.originProfileName}`,
@@ -100,9 +120,35 @@ export class SimEngine {
       globalProfiler.time('agentTick', () => {
         this.agents.tick(this.world, this.tick, (type, message) => this.emitEvent(type, message, schedule?.eventThrottleFactor), suppressMinorEvents)
       })
-      globalProfiler.time('stabilityGuards', () => {
+      globalProfiler.time('disasterTick', () => {
         this.disasters.tick(this.world, this.tick, this.life, this.agents, (type, message) => this.emitEvent(type, message, schedule?.eventThrottleFactor), suppressMinorEvents)
       })
+
+      if (this.tick % 3 === 0) {
+        globalProfiler.time('successionTick', () => {
+          const lifeSnap = this.life.getTileBiomassArray()
+          const counts = this.life.getTileCountsArray()
+          const result = tickSuccession(
+            this.world,
+            {
+              tileBiomass: lifeSnap,
+              tileCounts: counts,
+              worldWidth: this.world.width,
+              tick: this.tick,
+              lastEventTick: this.successionLastEventTick,
+              herbivoryPressure: this.herbivoryPressure,
+            },
+            (type, message) => this.emitEvent(type, message, schedule?.eventThrottleFactor),
+            suppressMinorEvents,
+          )
+          this.successionLastEventTick = result.lastEventTick
+        })
+      }
+
+      if (this.tick % 10 === 0) {
+        this.life.getRegistry().tickEstablishment(this.tick)
+        this.runBottleneckDetection(suppressMinorEvents)
+      }
 
       if (!this.deepTimeMode && this.tick % TICK_EVENT_INTERVAL === 0) {
         const lifeSnap = this.life.getSnapshot(false)
@@ -310,6 +356,8 @@ export class SimEngine {
     this.life.reset(this.world, (type, message) => this.emitEvent(type, message))
     this.agents.reset(this.world, (type, message) => this.emitEvent(type, message))
     this.disasters.reset()
+    this.bottleneckState = createBottleneckState()
+    this.successionLastEventTick = 0
     this.emitEvent(
       'world.reset',
       `World reset with seed "${this.settings.seed}" (${this.settings.worldWidth}×${this.settings.worldHeight})`,
@@ -333,6 +381,51 @@ export class SimEngine {
 
   getDisasterSystem(): DisasterSystem {
     return this.disasters
+  }
+
+  getSuccessionSnapshot() {
+    return computeSuccessionSnapshot(this.world)
+  }
+
+  getBottleneckState(): BottleneckState {
+    return { ...this.bottleneckState }
+  }
+
+  private runBottleneckDetection(suppressMinorEvents: boolean): void {
+    const lifeSnap = this.life.getSnapshot(false, this.world)
+    const agentSnap = this.agents.getSnapshot(false)
+    const alive = lifeSnap.species.filter((s) => s.population > 0 && s.establishmentStatus !== 'failed')
+    const dominant = alive[0]
+    const totalPop = lifeSnap.totalOrganisms + agentSnap.totalAgents
+    const dominantShare =
+      dominant && totalPop > 0 ? (dominant.population + (agentSnap.totalAgents > 0 ? 1 : 0)) / totalPop : 0
+
+    const current: BottleneckMetrics = {
+      totalPopulation: totalPop,
+      speciesCount: alive.length,
+      colonizedTiles: this.life.getColonizedTileCount(),
+      producerBiomass: lifeSnap.totalBiomass,
+      dominantShare,
+    }
+
+    this.bottleneckState = updateBottleneckDetection(
+      this.bottleneckState,
+      this.tick,
+      current,
+      this.prevBottleneckMetrics,
+      (type, message) => this.emitEvent(type, message),
+      suppressMinorEvents,
+    )
+
+    const mods = recoveryModifiers(this.bottleneckState)
+    this.life.setRecoveryModifiers(mods)
+    this.agents.setRecoveryModifiers(mods)
+
+    if (this.bottleneckState.recoveryActive && !suppressMinorEvents && this.tick % 400 === 0) {
+      this.emitEvent('evolution.adaptive_radiation', 'Adaptive radiation pressure — survivors diversifying into open niches.')
+    }
+
+    this.prevBottleneckMetrics = current
   }
 
   injectDisaster(type: DisasterType, severityValue = 0.55): boolean {

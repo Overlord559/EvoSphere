@@ -20,12 +20,21 @@ import {
   pickMoveTarget,
   stepTowardTarget,
 } from '../behavior/mobileBehavior'
+import { goalFromController, applyLearningFromAction } from '../cognition/behaviorPolicy'
+import {
+  applyInheritedLearnedBias,
+  inheritMemoryBias,
+} from '../cognition/agentLearning'
+import { mutateController } from '../cognition/NeuralController'
+import { recordSpeciesHabitatSuccess } from '../cognition/speciesMemory'
+import { adaptiveRadiationMessage, evaluateBranchCandidate } from '../evolution/adaptiveRadiation'
+import type { RecoveryModifiers } from '../evolution/bottleneckRecovery'
 import { scanLocalEnvironment } from '../behavior/sensoryTargets'
 import { FoodWebTracker, syncSpeciesFoodWeb } from '../ecology/foodWeb'
 import { computeGrazeEnergyGain, movementEnergyCost, terrainMovementCost } from '../ecology/herbivory'
 import { computeAgentFitness } from '../ecology/environmentalFitness'
 import { findPreyInRange, resolvePredation } from '../ecology/predation'
-import { mutateMobileAgentTraits, shouldSpeciateMobile } from '../genetics/agentMutation'
+import { mutateMobileAgentTraits } from '../genetics/agentMutation'
 import { deriveSensoryProfile } from '../senses/SenseSystem'
 import { buildSpeciesSelectionProfiles } from '../species/speciesSelectionMetrics'
 import { getTileAt } from '../world/generateWorld'
@@ -63,12 +72,22 @@ export class AgentSystem {
     localExtinctions: 0,
   }
   private lastWorld: World | null = null
+  private recoveryMods: RecoveryModifiers = {
+    reproductionBoost: 1,
+    dispersalBoost: 1,
+    mutationVarianceBoost: 1,
+    overcrowdingRelief: 1,
+  }
 
   constructor(seed: string, world: World, life: LifeSystem) {
     this.seed = seed
     this.life = life
     this.tickRng = forkRng(seed, 'agents')
     this.initTileArrays(world)
+  }
+
+  setRecoveryModifiers(mods: RecoveryModifiers): void {
+    this.recoveryMods = mods
   }
 
   seedInitialAgents(world: World, emit: AgentEventEmitter): void {
@@ -83,7 +102,11 @@ export class AgentSystem {
       const biomass = this.life.getTileBiomassArray()[idx] ?? 0
       if (
         biomass > 0.5 &&
-        (tile.terrain === 'grassland' || tile.terrain === 'forest' || tile.terrain === 'swamp') &&
+        (tile.terrain === 'fertile_plain' ||
+          tile.terrain === 'barren' ||
+          tile.terrain === 'basin' ||
+          tile.ecosystem === 'grassland' ||
+          tile.ecosystem === 'moss_field') &&
         spawnRng() > 0.88
       ) {
         this.spawnFounder('SimpleGrazer', tile.x, tile.y, world, 0, registry)
@@ -100,7 +123,9 @@ export class AgentSystem {
       if (
         grazerHere > 0 &&
         biomass > 0.3 &&
-        (tile.terrain === 'grassland' || tile.terrain === 'forest') &&
+        (tile.ecosystem === 'grassland' ||
+          tile.ecosystem === 'forest' ||
+          tile.terrain === 'fertile_plain') &&
         spawnRng() > 0.92
       ) {
         this.spawnFounder('SimplePredator', tile.x, tile.y, world, 0, registry)
@@ -112,7 +137,7 @@ export class AgentSystem {
       if (spawned >= 36) break
       if (!isTileActive(world, tile.x, tile.y)) continue
       if (
-        (tile.terrain === 'coast' || tile.terrain === 'swamp') &&
+        (tile.terrain === 'coast' || tile.terrain === 'basin' || tile.ecosystem === 'swamp') &&
         spawnRng() > 0.95
       ) {
         this.spawnFounder('Scavenger', tile.x, tile.y, world, 0, registry)
@@ -145,6 +170,7 @@ export class AgentSystem {
 
     const tileBiomass = this.life.getTileBiomassArray()
     this.rebuildTileAgentIndex(world)
+    const registry = this.life.getRegistry()
 
     const deaths: string[] = []
     const births: MobileAgent[] = []
@@ -182,9 +208,20 @@ export class AgentSystem {
       agent.age += 1
       if (agent.reproductionCooldown > 0) agent.reproductionCooldown -= 1
 
-      const goal = chooseAgentGoal(agent, tileBiomass, world, this.tileAgentIndex, this.tickRng)
+      const utilityGoal = chooseAgentGoal(agent, tileBiomass, world, this.tileAgentIndex, this.tickRng)
+      const speciesMem = registry.memoryStore.get(agent.speciesId)
+      const disasterStress = 0
+      const goal = agent.controller
+        ? goalFromController(agent, utilityGoal, disasterStress, speciesMem)
+        : utilityGoal
       agent.currentGoal = goal
       agent.targetReason = goalTargetReason(agent, goal)
+
+      recordSpeciesHabitatSuccess(
+        registry.memoryStore.ensure(agent.speciesId),
+        tile,
+        agent.environmentalFitness,
+      )
 
       if (goal === 'rest') {
         agent.lastAction = 'rest'
@@ -234,7 +271,7 @@ export class AgentSystem {
         agent.health > 0.55 &&
         agent.hunger < 0.5 &&
         agent.reproductionCooldown <= 0 &&
-        fitness.reproductionMultiplier > 0.45 &&
+        fitness.reproductionMultiplier > 0.45 * this.recoveryMods.reproductionBoost &&
         this.agents.length + births.length < MAX_TOTAL_AGENTS
       ) {
         const child = this.tryReproduce(agent, world, tick, emit, suppressMinorEvents)
@@ -412,6 +449,7 @@ export class AgentSystem {
     )
     agent.hunger = Math.max(0, agent.hunger - actual * 1.8)
     agent.lastAction = 'graze'
+    applyLearningFromAction(agent, 'graze', true)
 
     if (!suppressMinorEvents && this.tickRng() > 0.985) {
       this.recentActivityTiles.add(idx)
@@ -480,8 +518,10 @@ export class AgentSystem {
           `${predator.kind} hunted ${prey.kind} at (${predator.x}, ${predator.y})`,
         )
       }
+      applyLearningFromAction(predator, 'hunt', true)
     } else {
       predator.lastAction = 'hunt'
+      applyLearningFromAction(predator, 'hunt', false)
     }
   }
 
@@ -507,17 +547,24 @@ export class AgentSystem {
     const childGeneration = parent.generation + 1
     const parentPop = registry.getPopulation(parent.speciesId)
 
-    if (
-      shouldSpeciateMobile(
-        parent.genome,
-        childGenome,
-        childGeneration,
-        parentPop,
-        DEFAULT_SPECIATION_CONFIG,
-      )
-    ) {
-      const existing = registry.findByGenome(parent.kind, childGenome)
-      if (existing) {
+    const tile = getTileAt(world, parent.x, parent.y)
+    if (!tile) return null
+
+    const config = DEFAULT_SPECIATION_CONFIG
+    const branch = evaluateBranchCandidate(
+      parent.genome,
+      childGenome,
+      tile,
+      childGeneration,
+      parentPop,
+      config,
+      tick - (registry.get(parent.speciesId)?.createdAtTick ?? tick),
+      1,
+    )
+
+    if (branch.shouldBranch) {
+      const existing = registry.findByGenome(parent.kind, childGenome, config.geneticDistanceVariantThreshold)
+      if (existing && existing.establishmentStatus !== 'failed') {
         speciesId = existing.id
       } else {
         const species = registry.registerBranch(
@@ -526,15 +573,26 @@ export class AgentSystem {
           tick,
           parent.speciesId,
           childGeneration,
+          {
+            rank: branch.rank,
+            localFitnessScore: branch.localFitnessScore,
+            adaptedTerrain: branch.adaptedTerrain,
+            reason: branch.reason,
+          },
         )
         speciesId = species.id
-        if (!suppressMinorEvents) {
-          emit('life.speciation', `Mobile species "${species.name}" diverged from ${parent.kind}`)
+        if (!suppressMinorEvents && branch.rank !== 'variant') {
+          emit(
+            branch.rank === 'species' ? 'evolution.species_stabilized' : 'evolution.subspecies_emerged',
+            adaptiveRadiationMessage(branch.rank, parent.kind, branch.reason, tick),
+          )
+        } else if (!suppressMinorEvents && branch.rank === 'variant' && this.tickRng() > 0.85) {
+          emit('evolution.ecotype_emerged', adaptiveRadiationMessage('variant', parent.kind, branch.reason, tick))
         }
       }
     }
 
-    return createAgent(
+    const child = createAgent(
       parent.kind,
       speciesId,
       parent.x,
@@ -542,7 +600,14 @@ export class AgentSystem {
       childGenome,
       childGeneration,
       childBodyPlan,
+      `${this.seed}-child-${parent.id}-${tick}`,
     )
+    if (parent.controller && child.controller) {
+      child.controller = mutateController(parent.controller, () => mutRng(), parent.genome.mutationRate)
+      applyInheritedLearnedBias(child.controller, parent.controller)
+    }
+    child.memory = inheritMemoryBias(parent)
+    return child
   }
 
   private spawnFounder(

@@ -121,6 +121,42 @@ export function BriefingPanel() {
         </div>
       )}
 
+      {!selected && briefing.disasterPacingSummary && (
+        <div className="rounded border border-orange-500/20 bg-orange-500/5 p-2 font-mono text-xs text-orange-200/90">
+          <p className="mb-1 text-orange-300/80">DISASTER PACING</p>
+          <p>{briefing.disasterPacingSummary}</p>
+        </div>
+      )}
+
+      {!selected && briefing.successionOverview && (
+        <div>
+          <p className="mb-2 font-mono text-xs text-slate-500">ECOLOGICAL SUCCESSION</p>
+          <dl className="grid grid-cols-2 gap-1 font-mono text-[10px] text-slate-400">
+            <Row label="Barren" value={`${briefing.successionOverview.barrenPercent.toFixed(0)}%`} />
+            <Row label="Microbial" value={`${briefing.successionOverview.microbialPercent.toFixed(0)}%`} />
+            <Row label="Algal" value={`${briefing.successionOverview.algalPercent.toFixed(0)}%`} />
+            <Row label="Pioneer plants" value={`${briefing.successionOverview.pioneerPercent.toFixed(0)}%`} />
+            <Row label="Grassland" value={`${briefing.successionOverview.grasslandPercent.toFixed(0)}%`} />
+            <Row label="Forest" value={`${briefing.successionOverview.forestPercent.toFixed(0)}%`} />
+            <Row label="Swamp/marsh" value={`${briefing.successionOverview.swampMarshPercent.toFixed(0)}%`} />
+          </dl>
+        </div>
+      )}
+
+      {!selected && briefing.bottleneckStatus && (
+        <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2 font-mono text-xs text-amber-200">
+          <p className="mb-1 text-amber-300">RECOVERY STATUS</p>
+          <p>{briefing.bottleneckStatus}</p>
+        </div>
+      )}
+
+      {!selected && briefing.protoCognitionSummary && (
+        <div className="rounded border border-cyan-500/20 bg-cyan-500/5 p-2 font-mono text-xs text-cyan-200/90">
+          <p className="mb-1 text-cyan-300/80">PROTO-COGNITION</p>
+          <p>{briefing.protoCognitionSummary}</p>
+        </div>
+      )}
+
       {!selected && briefing.originExplanation && (
         <div className="rounded border border-slate-600/40 bg-slate-800/40 p-2 font-mono text-xs text-slate-400">
           <p className="mb-1 text-slate-500">ORIGIN PROFILE</p>

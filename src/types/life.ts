@@ -45,12 +45,17 @@ export interface LifeOrganism {
   biomass: number
 }
 
+export type TaxonRank = 'variant' | 'subspecies' | 'species'
+
+export type EstablishmentStatus = 'emerging' | 'stable' | 'failed'
+
 export interface SpeciesRecord {
   id: string
   name: string
   kind: EntityKind
   trophicRole: TrophicRole
   ancestorSpeciesId: string | null
+  parentSpeciesId: string | null
   createdAtTick: number
   population: number
   totalBiomass: number
@@ -62,6 +67,18 @@ export interface SpeciesRecord {
   /** Species ids that prey on this species. */
   predatorSpeciesIds: string[]
   isMobile: boolean
+  /** Taxonomic rank — variant → subspecies → species. */
+  taxonRank: TaxonRank
+  establishmentYear: number
+  establishmentStatus: EstablishmentStatus
+  localFitnessScore: number
+  adaptedTerrain: import('./simulation').TerrainType | null
+  adaptedClimate: string | null
+  populationTrend: 'growing' | 'stable' | 'declining' | 'unknown'
+  /** Grace ticks for emerging branches. */
+  establishmentGraceTicks: number
+  /** Species-level learned behavior memory (proto-cognition). */
+  speciesMemoryScore: number
 }
 
 export interface TileLifeData {

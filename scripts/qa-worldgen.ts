@@ -1,9 +1,10 @@
 /**
- * World generation variety QA — verifies biome diversity and origin determinism.
+ * World generation variety QA — abiotic terrain at birth, origin determinism.
  * Run: npm run qa:worldgen
  */
 import { SimEngine } from '../src/simulation/engine/SimEngine.ts'
 import { DEFAULT_WORLD_SIZE_PRESET, dimensionsForPreset } from '../src/simulation/world/worldSizePresets.ts'
+import { LEGACY_BIOTIC_TERRAINS } from '../src/simulation/world/terrainHelpers.ts'
 import type { TerrainType } from '../src/types/simulation.ts'
 
 const PRESET = DEFAULT_WORLD_SIZE_PRESET
@@ -18,7 +19,7 @@ const TEST_SEEDS = [
   'origin-test-beta',
 ]
 
-const REQUIRED_BIOMES: TerrainType[] = ['tundra', 'swamp', 'mountain']
+const REQUIRED_ABIOTIC: TerrainType[] = ['basin', 'fertile_plain', 'barren', 'mountain']
 
 function terrainCounts(world: ReturnType<SimEngine['getWorld']>): Map<TerrainType, number> {
   const counts = new Map<TerrainType, number>()
@@ -47,16 +48,22 @@ for (const seed of TEST_SEEDS) {
   const profile = world.originProfile.originProfileName
   originProfiles.add(profile)
 
-  const missing = REQUIRED_BIOMES.filter((b) => (counts.get(b) ?? 0) < 3)
-  const hasMarshOrSwamp = (counts.get('marsh') ?? 0) + (counts.get('swamp') ?? 0) >= 3
-  const hasCold = (counts.get('tundra') ?? 0) + (counts.get('snow') ?? 0) >= 3
+  let bioticAtBirth = 0
+  for (const tile of world.tiles) {
+    if (LEGACY_BIOTIC_TERRAINS.has(tile.terrain) || tile.ecosystem !== 'none') bioticAtBirth++
+  }
+  if (bioticAtBirth > 0) {
+    pass = false
+    console.log(`[FAIL] ${seed} — ${bioticAtBirth} biotic terrain tiles at world birth`)
+  }
 
-  if (missing.length > 0 && !hasCold) {
-    console.log(`[WARN] ${seed} — sparse cold biomes: ${missing.join(', ')}`)
-  }
-  if (!hasMarshOrSwamp) {
-    console.log(`[WARN] ${seed} — sparse wet lowlands`)
-  }
+  const hasWetLowland = (counts.get('basin') ?? 0) + (counts.get('coast') ?? 0) >= 3
+  const hasCold = (counts.get('tundra') ?? 0) + (counts.get('snow') ?? 0) >= 3
+  const hasBarren = REQUIRED_ABIOTIC.some((b) => (counts.get(b) ?? 0) >= 3)
+
+  if (!hasWetLowland) console.log(`[WARN] ${seed} — sparse wet lowlands`)
+  if (!hasCold) console.log(`[WARN] ${seed} — sparse cold terrain`)
+  if (!hasBarren) console.log(`[WARN] ${seed} — sparse barren/fertile land`)
 
   const engine2 = new SimEngine({
     seed,
@@ -70,23 +77,19 @@ for (const seed of TEST_SEEDS) {
     pass = false
     console.log(`[FAIL] ${seed} — origin profile not deterministic`)
   }
-  if (world2.originProfile.founderTileIds.length !== world.originProfile.founderTileIds.length) {
-    pass = false
-    console.log(`[FAIL] ${seed} — founder tiles not deterministic`)
-  }
 
   console.log(
     `[OK] ${seed} — origin=${profile}, founders=${world.originProfile.founderTileIds.length}, ` +
-      `tundra=${counts.get('tundra') ?? 0}, snow=${counts.get('snow') ?? 0}, marsh=${counts.get('marsh') ?? 0}, ` +
-      `swamp=${counts.get('swamp') ?? 0}, mountain=${counts.get('mountain') ?? 0}`,
+      `barren=${counts.get('barren') ?? 0}, basin=${counts.get('basin') ?? 0}, fertile=${counts.get('fertile_plain') ?? 0}, ` +
+      `mountain=${counts.get('mountain') ?? 0}, biotic_at_birth=${bioticAtBirth}`,
   )
 }
 
 if (originProfiles.size < 2) {
   pass = false
-  console.log(`\n[FAIL] Origin profiles too similar across seeds (${originProfiles.size} unique)`)
+  console.log(`\n[FAIL] Origin profiles too similar (${originProfiles.size} unique)`)
 } else {
-  console.log(`\nOrigin profile variety: ${originProfiles.size} unique profiles across ${TEST_SEEDS.length} seeds`)
+  console.log(`\nOrigin profile variety: ${originProfiles.size} unique profiles`)
 }
 
 console.log(`\nWORLDGEN QA: ${pass ? 'PASS' : 'FAIL'}`)

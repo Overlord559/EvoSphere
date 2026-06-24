@@ -83,6 +83,24 @@ export interface BriefingSnapshot {
   activeDisasters: ActiveDisaster[]
   /** Origin profile explanation when available. */
   originExplanation: string | null
+  /** Ecological succession overview (v0.5.4). */
+  successionOverview: SuccessionOverview | null
+  /** Bottleneck / recovery status. */
+  bottleneckStatus: string | null
+  /** Proto-cognition milestone summary. */
+  protoCognitionSummary: string | null
+  /** Disaster pacing summary for UI. */
+  disasterPacingSummary: string | null
+}
+
+export interface SuccessionOverview {
+  barrenPercent: number
+  microbialPercent: number
+  algalPercent: number
+  pioneerPercent: number
+  grasslandPercent: number
+  forestPercent: number
+  swampMarshPercent: number
 }
 
 export interface SelectedSpeciesBriefing {
@@ -171,6 +189,9 @@ export interface DisasterSnapshot {
   active: ActiveDisaster[]
   recentEnded: ActiveDisaster[]
   stressTileIds: number[]
+  settings?: import('../simulation/config/disasterConfig').DisasterSettings
+  lastMajorDisasterYear?: number
+  lastMassExtinctionYear?: number
 }
 
 export type ThrottleStatus = 'ok' | 'catching_up' | 'throttled' | 'overloaded'

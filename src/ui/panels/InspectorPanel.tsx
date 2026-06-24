@@ -3,7 +3,8 @@ import { isTileActive } from '../../simulation/world'
 import { topSpeciesOnTile } from '../../simulation/life/LifeSystem'
 import { agentsOnTile, topAgentSpeciesOnTile } from '../../simulation/agents/AgentSystem'
 import { formatPercent, formatTemperature } from '../../simulation/world'
-import { lifeKindLabel, terrainLabel } from '../viewport/tileColors'
+import { lifeKindLabel, terrainLabel, ecosystemLabel } from '../viewport/tileColors'
+import { controllerGoalLabel } from '../../simulation/cognition/behaviorPolicy'
 import { InspectorPreview } from '../viewport/InspectorPreview'
 import {
   representativeAgent,
@@ -78,10 +79,32 @@ export function InspectorPanel() {
         </button>
       )}
 
+      {previewAgent && (
+        <div className="rounded border border-cyan-500/20 bg-cyan-500/5 p-3 font-mono text-xs">
+          <p className="text-cyan-300">PROTO-COGNITION</p>
+          <dl className="mt-2 space-y-1">
+            <Row label="Current goal" value={previewAgent.currentGoal.replace(/_/g, ' ')} />
+            <Row label="Controller bias" value={controllerGoalLabel(previewAgent)} />
+            <Row
+              label="Inherited knowledge"
+              value={previewAgent.memory?.inheritedKnowledgeScore.toFixed(2) ?? '—'}
+            />
+            <Row label="Habitat fitness" value={previewAgent.environmentalFitness.toFixed(2)} />
+            <Row label="Target reason" value={previewAgent.targetReason} />
+          </dl>
+        </div>
+      )}
+
       <dl className="space-y-2 font-mono text-xs">
         <Row label="Position" value={`(${selectedTile.x}, ${selectedTile.y})`} />
         <Row label="Status" value={isVoid ? 'Space / void (inactive)' : 'Active planet tile'} />
-        <Row label="Terrain" value={isVoid ? 'void' : terrainLabel(selectedTile.terrain)} />
+        <Row label="Terrain (substrate)" value={isVoid ? 'void' : terrainLabel(selectedTile.terrain)} />
+        {!isVoid && selectedTile.ecosystem !== 'none' && (
+          <Row label="Ecosystem" value={ecosystemLabel(selectedTile.ecosystem)} />
+        )}
+        {!isVoid && (
+          <Row label="Succession" value={selectedTile.successionStage.replace(/_/g, ' ')} />
+        )}
         <Row label="Elevation" value={formatPercent(selectedTile.elevation)} />
         <Row label="Moisture" value={formatPercent(selectedTile.moisture)} />
         <Row label="Temperature" value={formatTemperature(selectedTile.temperature)} />
