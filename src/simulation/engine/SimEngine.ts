@@ -7,6 +7,8 @@ import type {
 } from '../../types/simulation'
 import type { DeepTimeSummary, SimSpeed } from '../../types/runtime'
 import { AgentSystem } from '../agents/AgentSystem'
+import { DisasterSystem } from '../disasters/DisasterSystem'
+import type { DisasterType } from '../disasters/DisasterTypes'
 import { LifeSystem } from '../life/LifeSystem'
 import { generateWorld } from '../world/generateWorld'
 import { buildBriefing } from './briefing'
@@ -14,7 +16,9 @@ import {
   MAX_EVENTS_RETAINED,
   RUNAWAY_AGENT_POPULATION,
   RUNAWAY_ORGANISM_POPULATION,
+  STABILITY_GUARD_INTERVAL,
 } from './stabilityGuards'
+import { globalProfiler } from './performanceProfiler'
 import { SPEED_SCHEDULE } from './simScheduler'
 import { tickToYears, yearsToTicks } from './simTime'
 
@@ -55,6 +59,7 @@ export class SimEngine {
   private readonly events: EventLogEntry[] = []
   private readonly life: LifeSystem
   private readonly agents: AgentSystem
+  private readonly disasters: DisasterSystem
   private lastDeepTimeSummary: DeepTimeSummary | null = null
   private speciesPopBeforeStep = new Map<string, number>()
   private deepTimeMode = false
@@ -70,9 +75,10 @@ export class SimEngine {
     this.world = generateWorld(this.settings)
     this.life = new LifeSystem(this.settings.seed, this.world)
     this.agents = new AgentSystem(this.settings.seed, this.world, this.life)
+    this.disasters = new DisasterSystem(this.settings.seed)
     this.emitEvent(
       'world.generated',
-      `World generated from seed "${this.settings.seed}" (${this.settings.worldWidth}×${this.settings.worldHeight}, planet r=${this.world.planetRadius.toFixed(1)})`,
+      `World generated from seed "${this.settings.seed}" (${this.settings.worldWidth}×${this.settings.worldHeight}, planet r=${this.world.planetRadius.toFixed(1)}) — origin: ${this.world.originProfile.originProfileName}`,
     )
     this.life.seedInitialLife(this.world, (type, message) => this.emitEvent(type, message))
     this.agents.seedInitialAgents(this.world, (type, message) => this.emitEvent(type, message))
@@ -88,8 +94,15 @@ export class SimEngine {
     for (let i = 0; i < count; i++) {
       this.tick += 1
       this.world.tick = this.tick
-      this.life.tick(this.world, this.tick, (type, message) => this.emitEvent(type, message, schedule?.eventThrottleFactor), suppressMinorEvents)
-      this.agents.tick(this.world, this.tick, (type, message) => this.emitEvent(type, message, schedule?.eventThrottleFactor), suppressMinorEvents)
+      globalProfiler.time('lifeTick', () => {
+        this.life.tick(this.world, this.tick, (type, message) => this.emitEvent(type, message, schedule?.eventThrottleFactor), suppressMinorEvents)
+      })
+      globalProfiler.time('agentTick', () => {
+        this.agents.tick(this.world, this.tick, (type, message) => this.emitEvent(type, message, schedule?.eventThrottleFactor), suppressMinorEvents)
+      })
+      globalProfiler.time('stabilityGuards', () => {
+        this.disasters.tick(this.world, this.tick, this.life, this.agents, (type, message) => this.emitEvent(type, message, schedule?.eventThrottleFactor), suppressMinorEvents)
+      })
 
       if (!this.deepTimeMode && this.tick % TICK_EVENT_INTERVAL === 0) {
         const lifeSnap = this.life.getSnapshot(false)
@@ -104,8 +117,13 @@ export class SimEngine {
       stepsRun += 1
     }
 
-    this.runStabilityGuards()
+    if (this.tick % STABILITY_GUARD_INTERVAL === 0) {
+      globalProfiler.time('stabilityGuards', () => {
+        this.runStabilityGuards()
+      })
+    }
     this.captureSpeciesPopBefore()
+    globalProfiler.recordFrame(count, false, false)
     return performance.now() - simStart
   }
 
@@ -291,6 +309,7 @@ export class SimEngine {
     this.world = generateWorld(this.settings)
     this.life.reset(this.world, (type, message) => this.emitEvent(type, message))
     this.agents.reset(this.world, (type, message) => this.emitEvent(type, message))
+    this.disasters.reset()
     this.emitEvent(
       'world.reset',
       `World reset with seed "${this.settings.seed}" (${this.settings.worldWidth}×${this.settings.worldHeight})`,
@@ -312,6 +331,22 @@ export class SimEngine {
     return this.lastDeepTimeSummary
   }
 
+  getDisasterSystem(): DisasterSystem {
+    return this.disasters
+  }
+
+  injectDisaster(type: DisasterType, severityValue = 0.55): boolean {
+    return this.disasters.injectDisaster(this.world, this.tick, type, severityValue, (t, m) =>
+      this.emitEvent(t, m),
+    ) !== null
+  }
+
+  injectRandomDisaster(): boolean {
+    return this.disasters.injectRandomDisaster(this.world, this.tick, (t, m) =>
+      this.emitEvent(t, m),
+    ) !== null
+  }
+
   getRecentActivityTileIndices(): number[] {
     return [...new Set([...this.life.getRecentActivityTiles(), ...this.agents.getRecentActivityTiles()])]
   }
@@ -322,12 +357,16 @@ export class SimEngine {
     fullBriefing: boolean,
     selectedSpeciesId: string | null,
   ): SimulationSnapshot {
-    const agentSnap = this.agents.getSnapshot(includeAgents)
-    const life = this.life.getSnapshot(includeOrganisms, this.world, agentSnap.agents)
+    const agentSnap = globalProfiler.time('speciesMetrics', () =>
+      this.agents.getSnapshot(includeAgents),
+    )
+    const life = globalProfiler.time('snapshotBuild', () =>
+      this.life.getSnapshot(includeOrganisms, this.world, agentSnap.agents),
+    )
 
     let briefing = this.cachedBriefing
     if (fullBriefing || !briefing || this.cachedBriefingTick !== this.tick) {
-      briefing = buildBriefing(
+      briefing = globalProfiler.time('briefingBuild', () => buildBriefing(
         this.tick,
         this.world,
         life,
@@ -336,7 +375,8 @@ export class SimEngine {
         this.lastDeepTimeSummary,
         this.speciesPopBeforeStep,
         selectedSpeciesId,
-      )
+        this.disasters.getSnapshot(),
+      ))
       if (fullBriefing) {
         this.cachedBriefing = briefing
         this.cachedBriefingTick = this.tick
@@ -345,6 +385,8 @@ export class SimEngine {
 
     this.renderSnapshotVersion += 1
     this.lastSnapshotTick = this.tick
+    globalProfiler.recordFrame(0, true, false)
+    globalProfiler.setEventsRetained(this.events.length)
 
     return {
       tick: this.tick,
@@ -357,6 +399,7 @@ export class SimEngine {
       lastDeepTimeSummary: this.lastDeepTimeSummary,
       renderSnapshotVersion: this.renderSnapshotVersion,
       lastSnapshotTick: this.lastSnapshotTick,
+      disasters: this.disasters.getSnapshot(),
     }
   }
 
@@ -387,8 +430,8 @@ export class SimEngine {
   private runStabilityGuards(): void {
     const lifeRemoved = this.life.quarantineInvalid(this.world)
     const agentRemoved = this.agents.quarantineInvalid(this.world)
-    const lifeCount = this.life.getSnapshot(false).totalOrganisms
-    const agentCount = this.agents.getSnapshot(false).totalAgents
+    const lifeCount = this.life.getOrganismCount()
+    const agentCount = this.agents.getAgentCount()
 
     const warnings: string[] = []
     if (lifeRemoved > 0) warnings.push(`${lifeRemoved} invalid organisms removed`)

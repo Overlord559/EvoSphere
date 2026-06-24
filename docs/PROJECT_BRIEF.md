@@ -22,7 +22,55 @@ Evolution and emergence are fascinating but hard to explore interactively. Most 
 4. **Browser-first** — no install, no backend, IndexedDB for persistence later
 5. **Honest scope** — no fake data, no dead controls, no spectacle without substance
 
-## v0.5 Body Plans + Senses + Environmental Selection ✅ (current)
+## v0.5.3 Deep-Time Pacing + Camera/Selection + Procedural World Variety + Cataclysms ✅ (current)
+
+Delivered:
+
+- Cursor-centered zoom fix (`cameraController.zoomAtScreenPoint`)
+- Species/tile inspection guardrails — no sim mutation on select; extinct species auto-clear
+- Era pacing model + Auto Pace UI (`eraPacing.ts`)
+- Fast/Super/Ultra increased tick budgets with graceful throttle
+- Randomized origin profiles per seed (`originProfiles.ts`)
+- Biome distinctness — snow, marsh, mountain ridges, swamp/tundra visuals
+- Natural disaster system (`disasters/`) with inject controls and Briefing panel
+- Latest Developments reports disaster/evolution changes
+- `npm run qa:worldgen` — biome/origin determinism gate
+
+Next phase: choose based on stability — **v0.6 Communication + Memory** or continued soak validation.
+
+## v0.5.2b Long-Run Browser Soak + Focus Escape UX ✅
+
+Delivered:
+
+- Soak Debug HUD with heap trend, snapshot/worker metrics, Pixi/cache counts, crash risk warnings
+- Focus escape controls + camera mode display; ESC exits focus/follow
+- Secondary crash fix: follow mode no longer traps camera via per-snapshot focus requests
+- Bounded render caches + species pop history; lifecycle guards for RAF/worker
+- `npm run qa:longrun` + manual browser soak checklist
+- Rust/WASM: **defer** until browser leak fully verified in manual soak
+
+## v0.5.2 Crash Forensics + Runaway Fix ✅
+
+Delivered:
+
+- Pixi render leak fixed (persistent Graphics, animated vs full redraw)
+- Worker snapshot backpressure + crash health HUD
+- `npm run qa:crash-repro` year-10 gate
+- Rust/WASM: **defer** — fix TS + SoA Phase B first; WASM spike only if lifeTick still dominates after stable browser QA
+
+## v0.5.1 Workerized Performance Architecture ✅
+
+Delivered:
+
+- Web Worker owns `SimEngine` — main thread renders React/Pixi only
+- Compact typed-array snapshots — render / inspector / full modes
+- Performance profiler + debug table (life, agents, snapshot, briefing, render)
+- Worker speed schedules — Super Fast / Ultra Fast no longer lock the UI thread
+- Main-thread fallback when worker unavailable (`WORKER_SIMULATION_ENABLED`)
+- Agent SoA Phase A + documented Phase B/C/D escalation (Rust/WASM deferred)
+- QA: `npm run qa:stability` · `npm run qa:performance`
+
+## v0.5 Body Plans + Senses + Environmental Selection ✅
 
 Delivered:
 

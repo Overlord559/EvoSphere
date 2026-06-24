@@ -4,13 +4,18 @@ import type { SimSpeed } from '../../types/runtime'
 import type { WorldSizePreset } from '../../types/simulation'
 import { WORLD_SIZE_PRESETS } from '../../simulation/world/worldSizePresets'
 import { formatSimYears, buildSimTimeDisplay } from '../../simulation/engine/simTime'
+import { ALL_DISASTER_TYPES, DISASTER_LABELS } from '../../simulation/disasters/DisasterTypes'
+import type { DisasterType } from '../../simulation/disasters/DisasterTypes'
+import { PerformanceDebugTable } from './PerformanceDebugTable'
 
 const SPEEDS: { id: Exclude<SimSpeed, 'deep'>; label: string; hint: string }[] = [
-  { id: 'normal', label: 'Normal', hint: '1 step/frame · full snapshots' },
-  { id: 'fast', label: 'Fast Forward', hint: 'time-budgeted · throttled snapshots' },
-  { id: 'superfast', label: 'Super Fast', hint: 'bounded batch · lighter briefing' },
-  { id: 'ultrafast', label: 'Ultra Fast', hint: 'max budget · snapshot throttling' },
+  { id: 'normal', label: 'Live', hint: 'smooth · frequent snapshots' },
+  { id: 'fast', label: 'Fast', hint: 'more sim steps · throttled snapshots' },
+  { id: 'superfast', label: 'Super Fast', hint: 'worker batch · visual interpolation' },
+  { id: 'ultrafast', label: 'Ultra Fast', hint: 'worker max batch · progress only' },
 ]
+
+const DISASTER_SEVERITIES = ['minor', 'moderate', 'major', 'catastrophic'] as const
 
 const DEEP_TIME_JUMPS = [
   { years: 10, label: '+10 yr', hint: 'quick' },
@@ -36,6 +41,9 @@ export function SimulationControls() {
   const pause = useSimulationStore((s) => s.pause)
   const stepSimulation = useSimulationStore((s) => s.stepSimulation)
   const setSpeed = useSimulationStore((s) => s.setSpeed)
+  const setAutoPace = useSimulationStore((s) => s.setAutoPace)
+  const injectDisaster = useSimulationStore((s) => s.injectDisaster)
+  const injectRandomDisaster = useSimulationStore((s) => s.injectRandomDisaster)
   const deepTimeYears = useSimulationStore((s) => s.deepTimeYears)
   const cancelDeepTime = useSimulationStore((s) => s.cancelDeepTime)
   const resetWorld = useSimulationStore((s) => s.resetWorld)
@@ -43,8 +51,14 @@ export function SimulationControls() {
   const setWorldSizePreset = useSimulationStore((s) => s.setWorldSizePreset)
   const setPauseWhileInspecting = useSimulationStore((s) => s.setPauseWhileInspecting)
   const setFollowSelectedSpecies = useSimulationStore((s) => s.setFollowSelectedSpecies)
+  const setLockedFollow = useSimulationStore((s) => s.setLockedFollow)
+  const workerMode = useSimulationStore((s) => s.workerMode)
+  const workerFallbackReason = useSimulationStore((s) => s.workerFallbackReason)
 
   const [debugOpen, setDebugOpen] = useState(false)
+  const [disasterType, setDisasterType] = useState<DisasterType>('wildfire')
+  const [disasterSeverity, setDisasterSeverity] = useState<(typeof DISASTER_SEVERITIES)[number]>('moderate')
+
   const simTime = buildSimTimeDisplay(
     runtime.internalTick,
     snapshot.life,
@@ -68,6 +82,9 @@ export function SimulationControls() {
         <p className="font-mono text-xs text-slate-400">
           {simTime.eraLabel} · Gen ~{simTime.generationEstimate}
         </p>
+        {runtime.autoPace && (
+          <p className="mt-1 font-mono text-[10px] text-cyan-400">Auto Pace — era-adjusted speed</p>
+        )}
         {visualMode === 'debug' && (
           <p className="mt-1 font-mono text-[10px] text-slate-600">
             internal tick {runtime.internalTick} · snapshot @ {runtime.lastSnapshotTick} · v
@@ -76,8 +93,11 @@ export function SimulationControls() {
         )}
         {isRunning && !deepTimeRunning && (
           <span className="mt-2 inline-block rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] text-emerald-400">
-            {simTime.speedLabel} · LIVE
+            {runtime.autoPace ? 'Auto Pace' : simTime.speedLabel} · LIVE{workerMode ? ' · WORKER' : ''}
           </span>
+        )}
+        {workerFallbackReason && (
+          <p className="mt-1 font-mono text-[10px] text-amber-500">{workerFallbackReason}</p>
         )}
         {runtime.throttleStatus !== 'ok' && (
           <p className="mt-2 font-mono text-[10px] text-amber-300">
@@ -166,11 +186,11 @@ export function SimulationControls() {
                 setSpeed(id)
                 if (!isRunning && !deepTimeRunning) play()
               }}
-              aria-pressed={runtime.speed === id}
+              aria-pressed={!runtime.autoPace && runtime.speed === id}
               disabled={deepTimeRunning}
               title={hint}
               className={`rounded px-2 py-1 font-mono text-xs transition-colors disabled:opacity-40 ${
-                runtime.speed === id
+                !runtime.autoPace && runtime.speed === id
                   ? 'bg-command-accent/15 text-command-accent'
                   : 'border border-command-border text-slate-400 hover:text-slate-200'
               }`}
@@ -178,7 +198,61 @@ export function SimulationControls() {
               {label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => {
+              setAutoPace(true)
+              if (!isRunning && !deepTimeRunning) play()
+            }}
+            aria-pressed={runtime.autoPace}
+            disabled={deepTimeRunning}
+            title="Era-based speed — fast early life, slower later"
+            className={`rounded px-2 py-1 font-mono text-xs transition-colors disabled:opacity-40 ${
+              runtime.autoPace
+                ? 'bg-cyan-500/15 text-cyan-300'
+                : 'border border-cyan-500/30 text-slate-400 hover:text-cyan-200'
+            }`}
+          >
+            Auto Pace
+          </button>
         </div>
+      </div>
+
+      <div>
+        <p className="mb-1.5 font-mono text-xs text-slate-500">NATURAL DISASTERS</p>
+        <div className="flex flex-wrap items-center gap-1">
+          <select
+            value={disasterType}
+            onChange={(e) => setDisasterType(e.target.value as DisasterType)}
+            className="rounded border border-command-border bg-command-bg px-2 py-1 font-mono text-xs text-slate-300"
+          >
+            {ALL_DISASTER_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {DISASTER_LABELS[t]}
+              </option>
+            ))}
+          </select>
+          <select
+            value={disasterSeverity}
+            onChange={(e) => setDisasterSeverity(e.target.value as (typeof DISASTER_SEVERITIES)[number])}
+            className="rounded border border-command-border bg-command-bg px-2 py-1 font-mono text-xs text-slate-300"
+          >
+            {DISASTER_SEVERITIES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <ControlButton onClick={() => injectDisaster(disasterType, disasterSeverity)}>
+            Inject
+          </ControlButton>
+          <ControlButton onClick={injectRandomDisaster}>Random</ControlButton>
+        </div>
+        {snapshot.disasters?.active.length > 0 && (
+          <p className="mt-1 font-mono text-[10px] text-orange-300">
+            {snapshot.disasters.active.length} active disaster(s)
+          </p>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3 font-mono text-[10px] text-slate-500">
@@ -198,6 +272,16 @@ export function SimulationControls() {
           />
           Follow selected species
         </label>
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={runtime.lockedFollow}
+            onChange={(e) => setLockedFollow(e.target.checked)}
+            disabled={!runtime.followSelectedSpecies}
+          />
+          Locked follow
+        </label>
+        <span className="text-cyan-600/80">Camera: {runtime.cameraMode}</span>
       </div>
 
       <div>
@@ -256,7 +340,19 @@ export function SimulationControls() {
                 <Row label="Plant tiles" value={String(perf.drawnPlantTiles)} />
                 <Row label="LOD" value={perf.lodLevel} />
                 <Row label="Throttle" value={runtime.throttleStatus} />
+                <Row label="Backend" value={workerMode ? 'worker' : 'main'} />
+                <Row label="Crash risk" value={perf.crashRiskLevel} />
+                <Row label="Pending snapshots" value={String(perf.pendingSnapshots)} />
+                <Row label="Snapshot est." value={`${(perf.snapshotBytesEstimate / 1024).toFixed(0)} KB`} />
+                <Row label="Pixi graphics" value={String(perf.pixiGraphicsCount)} />
+                <Row label="Org cap usage" value={`${perf.organismCapUsagePct}%`} />
+                <Row label="Max tile load" value={String(perf.maxTileLoad)} />
+                <Row label="Terrain redraws" value={String(perf.terrainRedrawCount)} />
+                {perf.heapEstimateMb !== null && (
+                  <Row label="Heap est." value={`${perf.heapEstimateMb} MB`} />
+                )}
               </dl>
+              <PerformanceDebugTable />
             </>
           )}
         </div>

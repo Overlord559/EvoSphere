@@ -12,6 +12,22 @@ export const MAX_PLANT_GLYPH_TILES = 2000
 export const MAX_DETAILED_GLYPHS = 120
 export const RUNAWAY_AGENT_POPULATION = 1200
 export const RUNAWAY_ORGANISM_POPULATION = 8000
+/** Max offspring created in a single life tick — ecological + safety cap. */
+export const MAX_BIRTHS_PER_TICK = 64
+/** Run full quarantine/population scans every N internal ticks. */
+export const STABILITY_GUARD_INTERVAL = 5
+/** Main thread may have at most this many snapshots awaiting apply. */
+export const MAX_PENDING_SNAPSHOTS = 2
+/** Worker-side cap on render snapshots posted per second. */
+export const MAX_WORKER_SNAPSHOTS_PER_SEC = 20
+/** Max terrain cache keys per world session. */
+export const MAX_TERRAIN_CACHE_ENTRIES = 8
+/** Max glyph signature cache entries. */
+export const MAX_GLYPH_CACHE_ENTRIES = 512
+/** Max species pop history entries (extinct species pruned). */
+export const MAX_SPECIES_POP_HISTORY = 256
+/** Max retained developments in briefing. */
+export const MAX_DEVELOPMENTS_RETAINED = 8
 
 export interface QuarantineReport {
   removedAgents: number

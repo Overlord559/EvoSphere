@@ -1,4 +1,3 @@
-import { Graphics } from 'pixi.js'
 import type { MobileAgent } from '../../types/agents'
 import type { LifeOrganism } from '../../types/life'
 import type { OverlayMode, Tile, World } from '../../types/simulation'
@@ -8,7 +7,10 @@ import { drawOrganicTile, drawDebugTile, drawVoidTile } from './biomeRenderer'
 import { drawAgentGlyph } from './agentGlyphs'
 import { drawPlantGlyphsForTile } from './plantGlyphs'
 import type { RenderLayers } from './renderLayers'
-import { clearAllLayers } from './renderLayers'
+import {
+  clearAllLayerGraphics,
+  clearAnimatedLayerGraphics,
+} from './renderLayers'
 import type { TileColorContext } from './tileColors'
 import { zoomDetailLevel } from './visualGenes'
 import { interpolatedTilePosition, isAgentMoving } from './agentInterpolation'
@@ -28,6 +30,8 @@ import {
 
 export type VisualMode = 'organic' | 'debug'
 
+export type RedrawMode = 'full' | 'animated' | 'snapshot'
+
 export interface OrganismRenderContext {
   world: World
   overlay: OverlayMode
@@ -42,10 +46,14 @@ export interface OrganismRenderContext {
   animTimeMs: number
   simTick: number
   activityTiles: number[]
+  stressTileIds?: number[]
   speciesTileIndices: number[] | null
   selectedSpeciesId: string | null
   selectedTile: Tile | null
   viewBounds: ViewBounds
+  /** When true, terrain/plant base layers retain previous frame — agents/overlays only. */
+  skipTerrainRedraw?: boolean
+  redrawMode?: RedrawMode
 }
 
 export interface RenderStats {
@@ -53,6 +61,7 @@ export interface RenderStats {
   drawnAgents: number
   drawnPlantTiles: number
   lodLevel: 'far' | 'medium' | 'close'
+  terrainRedrawn: boolean
 }
 
 function buildColorContext(
@@ -84,7 +93,14 @@ function organismsByTile(organisms: LifeOrganism[], width: number): Map<number, 
 }
 
 export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): RenderStats {
-  clearAllLayers(layers)
+  const redrawMode = ctx.redrawMode ?? (ctx.skipTerrainRedraw ? 'animated' : 'full')
+  const skipTerrain = redrawMode === 'animated'
+
+  if (skipTerrain) {
+    clearAnimatedLayerGraphics(layers)
+  } else {
+    clearAllLayerGraphics(layers)
+  }
 
   const {
     world,
@@ -120,62 +136,61 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
   let drawnPlantTiles = 0
   let detailedGlyphs = 0
 
-  const terrainG = new Graphics()
-  const plantsG = new Graphics()
+  const terrainG = layers.graphics.terrain
+  const plantsG = layers.graphics.plants
 
-  for (let y = viewBounds.minTileY; y <= viewBounds.maxTileY; y++) {
-    for (let x = viewBounds.minTileX; x <= viewBounds.maxTileX; x++) {
-      const idx = y * world.width + x
-      const tile = world.tiles[idx]
-      if (!tile) continue
+  if (!skipTerrain) {
+    for (let y = viewBounds.minTileY; y <= viewBounds.maxTileY; y++) {
+      for (let x = viewBounds.minTileX; x <= viewBounds.maxTileX; x++) {
+        const idx = y * world.width + x
+        const tile = world.tiles[idx]
+        if (!tile) continue
 
-      if (tile.terrain === 'void' || !world.activeMask[idx]) {
-        drawVoidTile(terrainG, x * tileSize, y * tileSize, tileSize)
+        if (tile.terrain === 'void' || !world.activeMask[idx]) {
+          drawVoidTile(terrainG, x * tileSize, y * tileSize, tileSize)
+          drawnTiles += 1
+          continue
+        }
+
+        const colorContext: TileColorContext | undefined = baseContext
+          ? { ...baseContext, tileIndex: idx }
+          : undefined
+
+        if (visualMode === 'organic') {
+          drawOrganicTile(terrainG, tile, tileSize, overlay, colorContext, animTimeMs, simTick)
+        } else {
+          drawTile(terrainG, tile, tileSize, overlay, colorContext)
+        }
         drawnTiles += 1
-        continue
-      }
 
-      const colorContext: TileColorContext | undefined = baseContext
-        ? { ...baseContext, tileIndex: idx }
-        : undefined
-
-      if (visualMode === 'organic') {
-        drawOrganicTile(terrainG, tile, tileSize, overlay, colorContext, animTimeMs, simTick)
-      } else {
-        drawTile(terrainG, tile, tileSize, overlay, colorContext)
-      }
-      drawnTiles += 1
-
-      const tileOrgs = orgByTile.get(idx)
-      if (
-        tileOrgs &&
-        tileOrgs.length > 0 &&
-        visualMode === 'organic' &&
-        drawnPlantTiles < MAX_PLANT_GLYPH_TILES
-      ) {
-        drawPlantGlyphsForTile(
-          plantsG,
-          tile,
-          tileSize,
-          tileCounts[idx] ?? 0,
-          tileBiomass[idx] ?? 0,
-          maxCount,
-          tileOrgs,
-          detail,
-          selectedSpeciesId,
-          animTimeMs,
-        )
-        drawnPlantTiles += 1
+        const tileOrgs = orgByTile.get(idx)
+        if (
+          tileOrgs &&
+          tileOrgs.length > 0 &&
+          visualMode === 'organic' &&
+          drawnPlantTiles < MAX_PLANT_GLYPH_TILES
+        ) {
+          drawPlantGlyphsForTile(
+            plantsG,
+            tile,
+            tileSize,
+            tileCounts[idx] ?? 0,
+            tileBiomass[idx] ?? 0,
+            maxCount,
+            tileOrgs,
+            detail,
+            selectedSpeciesId,
+            animTimeMs,
+          )
+          drawnPlantTiles += 1
+        }
       }
     }
   }
 
-  layers.terrain.addChild(terrainG)
-  layers.plants.addChild(plantsG)
-
   if (speciesSet) {
     const pulse = pulseAlpha(animTimeMs, 0.22, 0.08)
-    const highlightG = new Graphics()
+    const highlightG = layers.graphics.speciesHighlight
     for (const idx of speciesSet) {
       if (!tileIndexInBounds(idx, world.width, viewBounds)) continue
       const x = idx % world.width
@@ -184,12 +199,11 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
       highlightG.fill({ color: 0xa855f7, alpha: pulse })
       highlightG.stroke({ width: 1, color: 0xc084fc, alpha: 0.85 })
     }
-    layers.speciesHighlight.addChild(highlightG)
   }
 
   const activitySet = new Set(activityTiles)
   if (activitySet.size > 0 && (overlay === 'life' || overlay === 'biomass')) {
-    const activityG = new Graphics()
+    const activityG = layers.graphics.activity
     for (const idx of activitySet) {
       if (!tileIndexInBounds(idx, world.width, viewBounds)) continue
       const x = idx % world.width
@@ -198,7 +212,19 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
       activityG.rect(x * tileSize, y * tileSize, tileSize, tileSize)
       activityG.stroke({ width: 1, color: 0xfbbf24, alpha: actPulse })
     }
-    layers.activity.addChild(activityG)
+  }
+
+  const stressSet = ctx.stressTileIds
+  if (stressSet && stressSet.length > 0) {
+    const stressG = layers.graphics.activity
+    for (const idx of stressSet) {
+      if (!tileIndexInBounds(idx, world.width, viewBounds)) continue
+      const x = idx % world.width
+      const y = Math.floor(idx / world.width)
+      const stressPulse = pulseAlpha(animTimeMs + idx * 3, 0.35, 0.2)
+      stressG.rect(x * tileSize, y * tileSize, tileSize, tileSize)
+      stressG.stroke({ width: 1.5, color: 0xf97316, alpha: stressPulse })
+    }
   }
 
   const maxAgentsToDraw =
@@ -215,7 +241,7 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
     if (visibleAgents.length >= maxAgentsToDraw) break
   }
 
-  const agentsG = new Graphics()
+  const agentsG = layers.graphics.agents
   for (const agent of visibleAgents) {
     const visual = agentVisualStates.get(agent.id)
     const pos = visual ? interpolatedTilePosition(visual) : { x: agent.x, y: agent.y }
@@ -243,10 +269,9 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
       }
     }
   }
-  layers.agents.addChild(agentsG)
 
   if (selectedTile && isTileInBounds(selectedTile.x, selectedTile.y, viewBounds)) {
-    const outline = new Graphics()
+    const outline = layers.graphics.selection
     outline.rect(
       selectedTile.x * tileSize,
       selectedTile.y * tileSize,
@@ -254,7 +279,6 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
       tileSize,
     )
     outline.stroke({ width: 2, color: 0x22d3ee, alpha: 0.95 })
-    layers.selection.addChild(outline)
   }
 
   return {
@@ -262,5 +286,6 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
     drawnAgents: visibleAgents.length,
     drawnPlantTiles,
     lodLevel: detail,
+    terrainRedrawn: !skipTerrain,
   }
 }

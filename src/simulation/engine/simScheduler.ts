@@ -1,10 +1,10 @@
 import type { SimSpeed } from '../../types/runtime'
 
 /** Max simulation milliseconds budget per animation frame. */
-export const SIM_MS_BUDGET_PER_FRAME = 10
+export const SIM_MS_BUDGET_PER_FRAME = 14
 
 /** Hard cap on internal ticks per frame regardless of speed mode. */
-export const MAX_TICKS_PER_FRAME = 24
+export const MAX_TICKS_PER_FRAME = 48
 
 /** Minimum ms between full UI snapshots during fast playback. */
 export const MIN_SNAPSHOT_INTERVAL_MS = 50
@@ -31,23 +31,23 @@ export const SPEED_SCHEDULE: Record<Exclude<SimSpeed, 'deep'>, SpeedSchedule> = 
     eventThrottleFactor: 1,
   },
   fast: {
-    targetTicksPerFrame: 4,
+    targetTicksPerFrame: 8,
     snapshotEveryTicks: 2,
-    snapshotEveryMs: 80,
+    snapshotEveryMs: 60,
     fullBriefingEverySnapshot: true,
     eventThrottleFactor: 2,
   },
   superfast: {
-    targetTicksPerFrame: 8,
-    snapshotEveryTicks: 6,
-    snapshotEveryMs: 120,
+    targetTicksPerFrame: 20,
+    snapshotEveryTicks: 8,
+    snapshotEveryMs: 100,
     fullBriefingEverySnapshot: false,
     eventThrottleFactor: 4,
   },
   ultrafast: {
-    targetTicksPerFrame: 12,
-    snapshotEveryTicks: 12,
-    snapshotEveryMs: 180,
+    targetTicksPerFrame: 40,
+    snapshotEveryTicks: 16,
+    snapshotEveryMs: 140,
     fullBriefingEverySnapshot: false,
     eventThrottleFactor: 8,
   },

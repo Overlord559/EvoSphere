@@ -147,45 +147,94 @@ function drawBiomeTexture(
       g.rect(px, py, tileSize, tileSize)
       g.fill(baseColor)
       g.rect(px, py, tileSize, tileSize)
-      g.fill({ color: 0x1a3a2a, alpha: 0.15 + tile.moisture * 0.2 })
+      g.fill({ color: 0x0a1a12, alpha: 0.22 + tile.moisture * 0.25 })
+      if (detail) {
+        for (let i = 0; i < 4; i++) {
+          const rx = px + hashRange(x, y, 180 + i, 0.15, 0.85) * tileSize
+          g.moveTo(rx, py + tileSize)
+          g.lineTo(rx + 1.5, py + tileSize * 0.25)
+          g.stroke({ width: 1.2, color: 0x2d4a28, alpha: 0.55 })
+        }
+        drawOrganicPatch(g, px + tileSize * 0.35, py + tileSize * 0.65, tileSize * 0.2, 0x1a3020, 0.35)
+      }
+      break
+    }
+    case 'marsh': {
+      g.rect(px, py, tileSize, tileSize)
+      g.fill(adjustColor(baseColor, -8, 5, -5))
+      g.rect(px, py, tileSize, tileSize)
+      g.fill({ color: 0x3a5a40, alpha: 0.25 + tile.water * 0.2 })
       if (detail) {
         for (let i = 0; i < 3; i++) {
-          const rx = px + hashRange(x, y, 180 + i, 0.2, 0.8) * tileSize
-          g.moveTo(rx, py + tileSize)
-          g.lineTo(rx + 1, py + tileSize * 0.3)
-          g.stroke({ width: 1, color: 0x3d5a3a, alpha: 0.45 })
+          const rx = px + hashRange(x, y, 185 + i, 0.1, 0.9) * tileSize
+          g.moveTo(rx, py + tileSize * 0.85)
+          g.quadraticCurveTo(rx + 2, py + tileSize * 0.5, rx, py + tileSize * 0.2)
+          g.stroke({ width: 0.8, color: 0x6b8f5e, alpha: 0.5 })
         }
+        g.ellipse(px + tileSize * 0.6, py + tileSize * 0.55, tileSize * 0.18, tileSize * 0.08)
+        g.fill({ color: 0x7cfc00, alpha: 0.12 + tile.moisture * 0.1 })
       }
-      drawOrganicPatch(g, px + tileSize * 0.5, py + tileSize * 0.7, tileSize * 0.25, 0x2a4a35, 0.2)
       break
     }
     case 'mountain': {
       g.rect(px, py, tileSize, tileSize)
       g.fill(baseColor)
       const peakX = px + tileSize * hashRange(x, y, 190, 0.3, 0.7)
-      g.moveTo(peakX - tileSize * 0.3, py + tileSize)
-      g.lineTo(peakX, py + tileSize * 0.15)
-      g.lineTo(peakX + tileSize * 0.3, py + tileSize)
-      g.fill({ color: adjustColor(baseColor, 20, 20, 25), alpha: 0.35 })
+      g.moveTo(peakX - tileSize * 0.35, py + tileSize)
+      g.lineTo(peakX, py + tileSize * 0.12)
+      g.lineTo(peakX + tileSize * 0.35, py + tileSize)
+      g.fill({ color: adjustColor(baseColor, 15, 15, 20), alpha: 0.45 })
+      if (tile.temperature < 0.32 || tile.elevation > 0.78) {
+        g.moveTo(peakX - tileSize * 0.2, py + tileSize * 0.22)
+        g.lineTo(peakX, py + tileSize * 0.12)
+        g.lineTo(peakX + tileSize * 0.2, py + tileSize * 0.22)
+        g.lineTo(peakX, py + tileSize * 0.35)
+        g.fill({ color: 0xf0f8ff, alpha: 0.55 })
+      }
       if (detail) {
-        g.moveTo(px + tileSize * 0.2, py + tileSize * 0.6)
-        g.lineTo(px + tileSize * 0.8, py + tileSize * 0.55)
-        g.stroke({ width: 0.5, color: adjustColor(baseColor, -15, -15, -10), alpha: 0.3 })
+        g.moveTo(px + tileSize * 0.15, py + tileSize * 0.65)
+        g.lineTo(px + tileSize * 0.85, py + tileSize * 0.58)
+        g.stroke({ width: 0.6, color: adjustColor(baseColor, -20, -18, -12), alpha: 0.35 })
+        g.moveTo(px + tileSize * 0.4, py + tileSize * 0.75)
+        g.lineTo(px + tileSize * 0.55, py + tileSize * 0.45)
+        g.stroke({ width: 0.4, color: adjustColor(baseColor, -10, -10, -8), alpha: 0.3 })
+      }
+      break
+    }
+    case 'snow': {
+      g.rect(px, py, tileSize, tileSize)
+      g.fill(baseColor)
+      for (let i = 0; i < (detail ? 4 : 2); i++) {
+        const sx = px + hashRange(x, y, 205 + i, 0.05, 0.95) * tileSize
+        const sy = py + hashRange(x, y, 215 + i, 0.05, 0.95) * tileSize
+        g.circle(sx, sy, tileSize * hashRange(x, y, 225 + i, 0.03, 0.09))
+        g.fill({ color: 0xffffff, alpha: 0.25 + hash01(x, y, 235 + i) * 0.2 })
+      }
+      if (detail && tile.elevation > 0.75) {
+        g.moveTo(px + tileSize * 0.5, py + tileSize * 0.15)
+        g.lineTo(px + tileSize * 0.35, py + tileSize * 0.35)
+        g.lineTo(px + tileSize * 0.65, py + tileSize * 0.35)
+        g.fill({ color: 0xe8f4ff, alpha: 0.4 })
       }
       break
     }
     case 'tundra': {
       g.rect(px, py, tileSize, tileSize)
       g.fill(baseColor)
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < (detail ? 4 : 2); i++) {
         drawOrganicPatch(
           g,
           px + hashRange(x, y, 200 + i, 0.1, 0.9) * tileSize,
           py + hashRange(x, y, 210 + i, 0.1, 0.9) * tileSize,
-          tileSize * 0.04,
-          adjustColor(baseColor, -10, -5, 5),
-          0.2,
+          tileSize * 0.035,
+          adjustColor(baseColor, -5, 0, 8),
+          0.25,
         )
+      }
+      if (detail) {
+        g.moveTo(px + tileSize * 0.2, py + tileSize * 0.7)
+        g.lineTo(px + tileSize * 0.8, py + tileSize * 0.72)
+        g.stroke({ width: 0.4, color: 0xa8b8c8, alpha: 0.35 })
       }
       break
     }
@@ -316,8 +365,10 @@ export function terrainAccentColor(terrain: TerrainType): number {
     desert: 0xd4a574,
     mountain: 0x8b7355,
     river: 0x3498db,
-    tundra: 0xb8c5d0,
-    swamp: 0x4a6741,
+    tundra: 0xc8d8e4,
+    snow: 0xeef6ff,
+    swamp: 0x3d5a3a,
+    marsh: 0x4a6741,
     volcanic: 0x8b2500,
     hydrothermal_vent: 0x5c2d91,
     void: 0x050810,

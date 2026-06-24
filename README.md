@@ -2,11 +2,50 @@
 
 Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, mobile agents with predation, circular planet viewport, and Spore-inspired procedural Pixi rendering.
 
-**Current phase:** v0.5 Body Plans + Senses + Environmental Selection
+**Current phase:** v0.5.3 Deep-Time Pacing + Camera/Selection + Procedural World Variety + Cataclysms
 
 ## Status
 
-v0.4.3 engine stability + planet topology:
+v0.5.3 deep-time pacing + camera/selection + world variety + cataclysms (2026-06-24):
+
+- **Cursor-centered zoom** — wheel/trackpad zoom anchors on cursor via `zoomAtScreenPoint()`; no northwest drift
+- **Selection guards** — species/tile click no longer mutates sim state or auto-traps camera; extinct species cleared safely
+- **Deep-time pacing** — era-based Auto Pace (fast abiogenesis → slower scaffold for later eras); higher fast-mode tick budgets
+- **Random origin profiles** — deterministic founder sites vary by seed (vents, coasts, swamp mats, tundra, volcanic, basins)
+- **Biome variety** — snow, marsh, mountain ridges, improved swamp/tundra visuals
+- **Natural disaster system** — drought, flood, wildfire, eruption, ice pulse, tsunami, asteroid, disease, etc. with real tile/life effects
+- **Disaster controls** — inject/random + severity + Briefing active disasters + stress overlay
+- **Latest Developments** — disaster/evolution/colonization summaries from real deltas
+- **QA** — `npm run qa:worldgen` added; stability + performance gates pass
+
+v0.5.2b long-run soak + focus escape (2026-06-24):
+
+- **Soak Debug HUD** — runtime yr, heap trend, snapshot backlog, Pixi gfx/container counts, cache sizes, RAF/worker counts, crash risk + warnings
+- **Focus escape UX** — Exit Focus, Zoom Out, Reset Camera, Stop Following, Fit Planet, ESC key; camera mode label; manual pan/wheel disables follow unless locked
+- **Secondary crash fix** — follow mode no longer spams `cameraFocusRequest` every snapshot (soft `followPanTarget` pan instead); species pop history capped; render cache bounded + destroyed on reset/HMR
+- **Lifecycle guards** — singleton RAF/worker instance counters surfaced in HUD
+- **QA** — `npm run qa:longrun` (yr 25 table every 5 yr) + browser manual soak checklist in docs
+
+v0.5.2 crash forensics + stability (2026-06-23):
+
+- **Root cause fixed** — Pixi `Graphics` objects were recreated every animation frame without `destroy()` on layer clear → GPU/memory leak crashed tab ~year 4 at normal speed
+- **Persistent render surfaces** — one reusable `Graphics` per layer; terrain cached between snapshots; animated layers only on RAF
+- **Worker snapshot backpressure** — max 2 pending snapshots, latest-wins drop, worker-side snapshots/sec cap, `snapshotConsumed` ack
+- **Safety caps** — `MAX_BIRTHS_PER_TICK` (64), stability guards every 5 ticks, lightweight population counts
+- **Crash health HUD** — heap est., snapshot bytes, pending snapshots, Pixi gfx count, cap usage %, crash risk level
+- **QA** — `npm run qa:crash-repro` (year 10 runaway gate) + existing stability/performance scripts
+
+v0.5.1 workerized performance architecture:
+
+- **Web Worker simulation** — `SimEngine` runs off main thread; React/Pixi stay responsive at Super Fast / Ultra Fast
+- **Compact snapshots** — typed-array tile density + agent render buffers; transferable `ArrayBuffer` where feasible
+- **Feature flag** — `WORKER_SIMULATION_ENABLED` in `src/simulation/config/simConfig.ts` with main-thread fallback
+- **Performance profiler** — subsystem timings (life, agents, snapshot, briefing, render) + debug table in Advanced controls
+- **Render decoupling** — terrain layer cached by `worldId`; agents/overlays redraw on snapshot version; animation at display FPS
+- **Agent SoA (Phase A)** — structure-of-arrays mirror for hot fields; full tick migration planned Phase B
+- **QA benchmarks** — `npm run qa:performance` + existing `npm run qa:stability`
+
+v0.5 body plans + senses + environmental selection:
 
 - **Time-budgeted sim loop** — Normal/Fast/Super Fast/Ultra Fast use per-frame ms budget, not blind 100-tick batches
 - **Snapshot throttling** — internal ticks can outpace UI snapshots; briefing/developments update less often in fast modes
@@ -24,9 +63,9 @@ v0.5 body plans + senses + environmental selection:
 - **Environmental fitness** — temperature, moisture, terrain, biomass, predator pressure, crowding affect survival and reproduction
 - **Species selection metrics** — body plan summary, senses, dominant habitat, fitness, selection pressures in Species/Briefing panels
 - **Visual integration** — glyphs reflect body plan (fins, tentacles, jaws, armor shell, antennae)
-- **Stability QA gate** — `npx tsx scripts/qa-stability.ts` (Standard 192×192, all speed modes)
+- **Stability QA gate** — `npm run qa:stability` · `npm run qa:performance`
 
-v0.4.2 living simulation UX:
+v0.4.3 engine stability + planet topology:
 
 - Simulated time UI, Play-first controls, smooth agent interpolation, developments feed, Deep Time progress/cancel
 
@@ -52,7 +91,18 @@ npm install
 npm run dev
 npm run build
 npm run lint
+npm run qa:stability
+npm run qa:performance
+npm run qa:crash-repro
+npm run qa:longrun
+npm run qa:worldgen
 ```
+
+## Manual browser QA (v0.5.2b)
+
+**Soak:** `npm run dev` → Standard 192×192, worker on, organic on → Normal to yr 10 → Fast 5 min → Super Fast 3 min → Ultra Fast 1 min. Watch Soak HUD: Pixi gfx stable (~6), pending snap ≤2, worker=1, RAF=1, heap trend flat, crash risk low/medium.
+
+**Focus escape:** Focus species/tile → zoom in → manual zoom out → Exit Focus → Stop Following → Reset Camera → ESC → Fit Planet. Sim keeps running unless Pause while inspecting is on.
 
 ## Deep-time performance (approximate, seed `evosphere-prime`, Standard 192×192)
 

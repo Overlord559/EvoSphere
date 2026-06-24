@@ -79,6 +79,10 @@ export interface BriefingSnapshot {
   latestDevelopments: LatestDevelopment[]
   /** v0.5 environmental selection narratives from real species metrics. */
   selectionNarratives: string[]
+  /** Active disaster summaries for briefing panel. */
+  activeDisasters: ActiveDisaster[]
+  /** Origin profile explanation when available. */
+  originExplanation: string | null
 }
 
 export interface SelectedSpeciesBriefing {
@@ -149,7 +153,44 @@ export type EventCategory =
 
 export type SimSpeed = 'normal' | 'fast' | 'superfast' | 'ultrafast' | 'deep'
 
+export interface ActiveDisaster {
+  id: string
+  type: string
+  severity: string
+  severityValue: number
+  startTick: number
+  durationTicks: number
+  affectedTileIds: number[]
+  effectSummary: string
+  lifeImpact: string
+  agentImpact: string
+  biomeImpact: string
+}
+
+export interface DisasterSnapshot {
+  active: ActiveDisaster[]
+  recentEnded: ActiveDisaster[]
+  stressTileIds: number[]
+}
+
 export type ThrottleStatus = 'ok' | 'catching_up' | 'throttled' | 'overloaded'
+
+export type CrashRiskLevel = 'low' | 'medium' | 'high' | 'critical'
+
+export type CameraMode =
+  | 'free'
+  | 'focused_tile'
+  | 'focused_species'
+  | 'following_species'
+  | 'inspecting_agent'
+
+export type SoakWarningSeverity = 'low' | 'medium' | 'high' | 'critical'
+
+export interface SoakWarning {
+  code: string
+  message: string
+  severity: SoakWarningSeverity
+}
 
 export interface PerformanceStats {
   fpsEstimate: number
@@ -159,16 +200,58 @@ export interface PerformanceStats {
   drawnAgents: number
   drawnPlantTiles: number
   lodLevel: 'far' | 'medium' | 'close'
+  /** Browser heap estimate in MB when performance.memory is available. */
+  heapEstimateMb: number | null
+  /** Rough JSON byte estimate for last snapshot applied. */
+  snapshotBytesEstimate: number
+  workerMessagesPerSec: number
+  pendingSnapshots: number
+  pixiGraphicsCount: number
+  organismBirthsLastInterval: number
+  organismDeathsLastInterval: number
+  organismCapUsagePct: number
+  maxTileLoad: number
+  crashRiskLevel: CrashRiskLevel
+  terrainRedrawCount: number
+  /** Long-run soak telemetry (v0.5.2b). */
+  runtimeSeconds: number
+  simulatedYearDisplay: number
+  snapshotsPerSec: number
+  snapshotsDropped: number
+  developmentCount: number
+  eventCount: number
+  pixiContainerCount: number
+  renderTextureCount: number
+  terrainCacheSize: number
+  glyphCacheSize: number
+  agentCountDisplay: number
+  speciesCountDisplay: number
+  maxTileAgents: number
+  rafLoopCount: number
+  workerInstanceCount: number
+  cameraMode: CameraMode
+  cameraUpdatesPerSec: number
+  heapTrendMbPerMin: number | null
+  soakWarnings: SoakWarning[]
 }
 
 export interface RuntimeState {
   isRunning: boolean
   speed: SimSpeed
+  /** When true, effective speed follows era-based Auto Pace profile. */
+  autoPace: boolean
   throttleStatus: ThrottleStatus
   /** Warning message when simulation degrades. */
   throttleMessage: string | null
   pauseWhileInspecting: boolean
   followSelectedSpecies: boolean
+  /** When true, manual pan/zoom does not disable species follow. */
+  lockedFollow: boolean
+  cameraMode: CameraMode
+  /** User manually moved camera — suppresses auto-follow until cleared. */
+  userCameraOverride: boolean
+  /** Soft follow target updated on snapshot (not cameraFocusRequest spam). */
+  followPanTarget: { tileX: number; tileY: number } | null
   performance: PerformanceStats
   /** Internal tick counter mirrored from engine (may lead snapshot). */
   internalTick: number

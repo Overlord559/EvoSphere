@@ -103,6 +103,31 @@ export function BriefingPanel() {
         </div>
       )}
 
+      {briefing.activeDisasters.length > 0 && (
+        <div>
+          <p className="mb-2 font-mono text-xs text-slate-500">ACTIVE DISASTERS</p>
+          <ul className="space-y-2">
+            {briefing.activeDisasters.map((d) => (
+              <li
+                key={d.id}
+                className="rounded border border-orange-500/30 bg-orange-500/5 p-2 font-mono text-xs text-orange-200"
+              >
+                <p className="font-medium">{d.type.replace(/_/g, ' ')} · {d.severity}</p>
+                <p className="mt-1 text-orange-200/80">{d.effectSummary}</p>
+                <p className="mt-1 text-[10px] text-orange-300/70">{d.lifeImpact}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {!selected && briefing.originExplanation && (
+        <div className="rounded border border-slate-600/40 bg-slate-800/40 p-2 font-mono text-xs text-slate-400">
+          <p className="mb-1 text-slate-500">ORIGIN PROFILE</p>
+          <p>{briefing.originExplanation}</p>
+        </div>
+      )}
+
       {!selected && briefing.selectionNarratives.length > 0 && (
         <div>
           <p className="mb-2 font-mono text-xs text-slate-500">ENVIRONMENTAL SELECTION</p>

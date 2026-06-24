@@ -13,6 +13,7 @@ import {
   isTileActiveOnPlanet,
   markVoidTile,
 } from './planetMask'
+import { buildOriginProfile } from './originProfiles'
 
 const SEA_LEVEL = 0.38
 const DEEP_OCEAN_LEVEL = 0.22
@@ -51,10 +52,10 @@ function computeSoilFertility(
   if (terrain === 'deep_ocean' || terrain === 'ocean' || terrain === 'hydrothermal_vent') {
     return 0.05
   }
-  if (terrain === 'desert' || terrain === 'mountain' || terrain === 'volcanic') {
+  if (terrain === 'desert' || terrain === 'mountain' || terrain === 'volcanic' || terrain === 'snow') {
     return 0.15
   }
-  if (terrain === 'river' || terrain === 'swamp' || terrain === 'coast') {
+  if (terrain === 'river' || terrain === 'swamp' || terrain === 'marsh' || terrain === 'coast') {
     return 0.55 + moisture * 0.25
   }
   const tempFactor = 1 - Math.abs(temperature - 0.55) * 1.2
@@ -81,10 +82,15 @@ function classifyLandTerrain(
   moisture: number,
   temperature: number,
 ): TerrainType {
-  if (elevation >= MOUNTAIN_LEVEL) return 'mountain'
-  if (temperature < 0.22) return 'tundra'
-  if (moisture < 0.22 && temperature > 0.45) return 'desert'
-  if (moisture > 0.72 && elevation < SEA_LEVEL + 0.12) return 'swamp'
+  if (elevation >= MOUNTAIN_LEVEL) {
+    if (temperature < 0.28) return 'snow'
+    return 'mountain'
+  }
+  if (temperature < 0.2) return 'tundra'
+  if (temperature < 0.32 && elevation > 0.55) return 'snow'
+  if (moisture < 0.18 && temperature > 0.42) return 'desert'
+  if (moisture > 0.78 && elevation < SEA_LEVEL + 0.1 && temperature > 0.38) return 'marsh'
+  if (moisture > 0.68 && elevation < SEA_LEVEL + 0.14 && temperature > 0.45) return 'swamp'
   if (moisture > 0.48) return 'forest'
   return 'grassland'
 }
@@ -120,6 +126,39 @@ function getElevationGrid(
     }
   }
   return grid
+}
+
+/** Enhance elevation along deterministic ridge lines for visible mountain ranges. */
+function applyMountainRidges(
+  elevationGrid: number[][],
+  settings: SimulationSettings,
+): void {
+  const { seed, worldWidth, worldHeight } = settings
+  const ridgeRng = forkRng(seed, 'mountain-ridges')
+  const ridgeCount = Math.max(2, Math.floor(worldWidth / 48))
+
+  for (let r = 0; r < ridgeCount; r++) {
+    const angle = ridgeRng() * Math.PI
+    const cx = ridgeRng() * worldWidth
+    const cy = ridgeRng() * worldHeight
+    const spread = 2 + ridgeRng() * 4
+
+    for (let y = 0; y < worldHeight; y++) {
+      for (let x = 0; x < worldWidth; x++) {
+        const dx = x - cx
+        const dy = y - cy
+        const along = dx * Math.cos(angle) + dy * Math.sin(angle)
+        const across = -dx * Math.sin(angle) + dy * Math.cos(angle)
+        const ridgeFactor = Math.exp(-(across * across) / (spread * spread))
+        if (Math.abs(along) < worldWidth * 0.45) {
+          elevationGrid[y][x] = Math.min(
+            1,
+            elevationGrid[y][x] + ridgeFactor * (0.08 + ridgeRng() * 0.06),
+          )
+        }
+      }
+    }
+  }
 }
 
 function getMoistureGrid(settings: SimulationSettings): number[][] {
@@ -325,6 +364,7 @@ function gridToTiles(
 export function generateWorld(settings: SimulationSettings): World {
   const geometry = computePlanetGeometry(settings)
   const elevationGrid = getElevationGrid(settings)
+  applyMountainRidges(elevationGrid, settings)
   const moistureGrid = getMoistureGrid(settings)
   const terrainGrid = buildTerrainGrid(elevationGrid, moistureGrid, settings, geometry)
   const tiles = gridToTiles(elevationGrid, moistureGrid, terrainGrid, settings, geometry)
@@ -334,7 +374,7 @@ export function generateWorld(settings: SimulationSettings): World {
     if (!activeMask[i]) markVoidTile(tiles[i])
   }
 
-  return {
+  const draftWorld: World = {
     id: nanoid(),
     seed: settings.seed,
     width: settings.worldWidth,
@@ -345,7 +385,33 @@ export function generateWorld(settings: SimulationSettings): World {
     planetCenterY: geometry.centerY,
     planetRadius: geometry.radius,
     activeMask,
+    originProfile: {
+      originProfileName: 'pending',
+      founderTileIds: [],
+      originBiomeTypes: [],
+      originEnergySources: [],
+      explanation: '',
+      founderSites: [],
+    },
   }
+
+  const originProfile = buildOriginProfile(settings, draftWorld)
+  draftWorld.originProfile = {
+    originProfileName: originProfile.originProfileName,
+    founderTileIds: originProfile.founderTileIds,
+    originBiomeTypes: originProfile.originBiomeTypes,
+    originEnergySources: originProfile.originEnergySources,
+    explanation: originProfile.explanation,
+    founderSites: originProfile.sites.map((s) => ({
+      tileIndex: s.tileIndex,
+      x: s.x,
+      y: s.y,
+      lifeKind: s.lifeKind,
+      energySource: s.energySource,
+    })),
+  }
+
+  return draftWorld
 }
 
 export function getTileAt(world: World, x: number, y: number): Tile | undefined {

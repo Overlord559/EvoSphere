@@ -3,6 +3,7 @@ import type { LifeSnapshot, SpeciesRecord } from '../../types/life'
 import type {
   BriefingSnapshot,
   DeepTimeSummary,
+  DisasterSnapshot,
   EventLogEntry,
   SelectedSpeciesBriefing,
 } from '../../types/runtime'
@@ -25,6 +26,7 @@ export function buildBriefing(
   lastDeepTimeSummary: DeepTimeSummary | null,
   speciesPopHistory: Map<string, number>,
   selectedSpeciesId: string | null,
+  disasters: DisasterSnapshot,
 ): BriefingSnapshot {
   const aliveSpecies = life.species.filter((s) => s.population > 0)
   const dominant = aliveSpecies[0] ?? null
@@ -107,8 +109,11 @@ export function buildBriefing(
       events,
       selectedSpeciesId,
       speciesPopHistory,
+      disasters,
     ),
     selectionNarratives: buildSelectionNarratives(agents.speciesSelectionProfiles, life.species),
+    activeDisasters: disasters.active,
+    originExplanation: world.originProfile?.explanation ?? null,
   }
 }
 

@@ -7,7 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "qa:stability": "tsx scripts/qa-stability.ts",
+    "qa:performance": "tsx scripts/qa-performance.ts",
+    "qa:crash-repro": "tsx scripts/qa-crash-repro.ts",
+    "qa:longrun": "tsx scripts/qa-longrun.ts",
+    "qa:worldgen": "tsx scripts/qa-worldgen.ts"
   },
   "dependencies": {
     "idb": "^8.0.3",
@@ -27,6 +32,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "oxlint": "^1.69.0",
     "tailwindcss": "^4.3.1",
+    "tsx": "^4.20.3",
     "typescript": "~6.0.2",
     "vite": "^8.1.0"
   }

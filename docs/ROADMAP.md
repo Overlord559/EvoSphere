@@ -92,7 +92,51 @@
 - [x] Throttled agent + food-web milestone events
 - [x] Deep-time summary includes grazer/predator deltas, predation, starvation counts
 
-## v0.5 Body Plans + Senses + Environmental Selection ✅ (current)
+## v0.5.3 Deep-Time Pacing + Camera/Selection + Procedural World Variety + Cataclysms ✅ (current)
+
+- [x] Cursor-centered zoom — `zoomAtScreenPoint` in `cameraController.ts`
+- [x] Selection/inspection guards — no sim mutation; extinct species clear; tile void-safe
+- [x] Era pacing + Auto Pace — `eraPacing.ts`, era-inferred speed budgets
+- [x] Fast mode usefulness — increased scheduler/worker batch sizes, era multipliers
+- [x] Origin profiles — deterministic varied founder sites per seed
+- [x] Biome variety — snow, marsh, mountain ridges, improved classification
+- [x] Biome visuals — distinct swamp/marsh/tundra/snow/mountain rendering
+- [x] Natural disaster system — 13 disaster types with real state effects
+- [x] Disaster UI — inject, random, severity, Briefing active list, stress overlay
+- [x] Latest Developments — disaster/evolution summaries from real events/deltas
+- [x] QA — `npm run qa:worldgen` + existing stability/performance gates
+
+## v0.5.2b Long-Run Browser Soak + Focus Escape UX ✅
+
+- [x] Soak Debug HUD — heap trend, snapshot backlog, Pixi counts, cache sizes, RAF/worker counts, warnings
+- [x] Focus escape — Exit Focus, Zoom Out, Reset Camera, Stop Following, Fit Planet, ESC
+- [x] Camera modes — free / focused_tile / focused_species / following_species / inspecting_agent
+- [x] Follow fix — soft pan via `followPanTarget`; manual input disables follow unless locked
+- [x] Lifecycle guards — bounded caches, species pop history cap, worker/RAF singleton telemetry
+- [x] `npm run qa:longrun` — headless yr 25 table every 5 yr + browser manual checklist
+
+## v0.5.2 Crash Forensics + Runaway Fix ✅
+
+- [x] Pixi render leak fix — persistent layer Graphics, destroy-on-clear fallback, animated vs full redraw
+- [x] Worker snapshot backpressure — pending cap, latest-wins, snapshots/sec limit, consume ack
+- [x] Safety caps — births/tick, stability guard interval, lightweight population counts
+- [x] Crash health HUD — heap, snapshot bytes, pending snapshots, Pixi count, crash risk
+- [x] `npm run qa:crash-repro` — year 10 runaway/leak gate with telemetry samples
+- [x] Rust/WASM decision gate documented — TS worker + SoA Phase B first; WASM spike only if lifeTick still dominates
+
+## v0.5.1 Workerized Performance Architecture ✅
+
+- [x] Performance profiler — subsystem timings, debug table, top-5 bottlenecks
+- [x] Web Worker simulation — `simWorker.ts` owns `SimEngine`; main thread renders only
+- [x] Worker protocol — init/play/pause/speed/snapshot/deep-time/cancel messages
+- [x] Compact snapshots — render / inspector / full modes; typed-array tile + agent buffers
+- [x] Feature flag + main-thread fallback — `WORKER_SIMULATION_ENABLED`
+- [x] Worker speed schedules — Super Fast / Ultra Fast batch in worker without main-thread lock
+- [x] Render decoupling — terrain cache by worldId; agent/overlay layers on snapshot version
+- [x] Agent SoA Phase A — mirror hot fields for snapshot encoding; Phase B migration documented
+- [x] QA performance script — `npm run qa:performance`
+
+## v0.5 Body Plans + Senses + Environmental Selection ✅
 
 - [x] Body plan model on mobile agents (symmetry, locomotion, mouth, armor, sensors, adaptations)
 - [x] Body plan genetics — derived from genome, slow mutation on reproduction

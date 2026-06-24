@@ -276,6 +276,10 @@ export class AgentSystem {
     return t
   }
 
+  getAgentCount(): number {
+    return this.agents.length
+  }
+
   quarantineInvalid(world: World): number {
     let removed = 0
     const next: MobileAgent[] = []
@@ -363,6 +367,18 @@ export class AgentSystem {
     this.initTileArrays(world)
     this.resetDeepStats()
     this.seedInitialAgents(world, emit)
+  }
+
+  applyMortalityPressure(world: World, tileIndex: number, pressure: number): void {
+    const w = world.width
+    const x = tileIndex % w
+    const y = Math.floor(tileIndex / w)
+    for (const agent of this.agents) {
+      if (agent.x !== x || agent.y !== y) continue
+      agent.health -= pressure
+      agent.energy = Math.max(0, agent.energy - pressure * 0.6)
+      agent.hunger = Math.min(1, agent.hunger + pressure * 0.3)
+    }
   }
 
   private tryGraze(

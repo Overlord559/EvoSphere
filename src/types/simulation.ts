@@ -15,10 +15,29 @@ export type TerrainType =
   | 'mountain'
   | 'river'
   | 'tundra'
+  | 'snow'
   | 'swamp'
+  | 'marsh'
   | 'volcanic'
   | 'hydrothermal_vent'
   | 'void'
+
+export interface OriginProfile {
+  originProfileName: string
+  founderTileIds: number[]
+  originBiomeTypes: TerrainType[]
+  originEnergySources: string[]
+  explanation: string
+  founderSites: OriginFounderSite[]
+}
+
+export interface OriginFounderSite {
+  tileIndex: number
+  x: number
+  y: number
+  lifeKind: import('./life').LifeKind
+  energySource: string
+}
 
 export interface Tile {
   x: number
@@ -46,6 +65,8 @@ export interface World {
   planetRadius: number
   /** Per-tile active mask — false = space/void outside planet. */
   activeMask: boolean[]
+  /** Deterministic founder-life origin profile for this world. */
+  originProfile: OriginProfile
 }
 
 export type WorldSizePreset = 'small' | 'standard' | 'large' | 'experimental'
@@ -71,6 +92,8 @@ export interface SimulationSnapshot {
   renderSnapshotVersion: number
   /** Internal tick when this snapshot was assembled. */
   lastSnapshotTick: number
+  /** Active natural disasters (v0.5.3). */
+  disasters: import('./runtime').DisasterSnapshot
 }
 
 export interface EventLogEntry {

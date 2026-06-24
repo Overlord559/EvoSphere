@@ -26,6 +26,8 @@ import { isTileActive } from '../world/planetMask'
 import {
   clampOrganismVitals,
   sanitizeOrganism,
+  MAX_BIRTHS_PER_TICK,
+  MAX_SPECIES_POP_HISTORY,
 } from '../engine/stabilityGuards'
 import { createFounderOrganism, createOrganism } from './createLife'
 import { SpeciesRegistry, resetSpeciesCounter } from '../species/speciesRegistry'
@@ -59,6 +61,8 @@ export class LifeSystem {
   private bloomCooldown = 0
   private dieOffCooldown = 0
   private recentActivityTiles = new Set<number>()
+  private lastTickBirths = 0
+  private lastTickDeaths = 0
 
   constructor(seed: string, world: World) {
     this.seed = seed
@@ -69,6 +73,40 @@ export class LifeSystem {
   }
 
   seedInitialLife(world: World, emit: LifeEventEmitter): void {
+    const profile = world.originProfile
+    let seeded = 0
+
+    if (profile.founderSites.length > 0) {
+      for (const site of profile.founderSites) {
+        if (seeded >= 64) break
+        this.spawnFounder(site.lifeKind, site.x, site.y, world, 0)
+        seeded += 1
+      }
+    } else {
+      this.seedInitialLifeLegacy(world, emit)
+      return
+    }
+
+    this.rebuildTileIndex(world)
+    this.colonizedTiles.clear()
+    for (let i = 0; i < this.tileCounts.length; i++) {
+      if (this.tileCounts[i] > 0) this.colonizedTiles.add(i)
+    }
+    if (this.organisms.length > 0) {
+      const speciesCount = this.registry.getAll().filter((s) => s.population > 0).length
+      emit(
+        'life.first',
+        `First life seeded (${profile.originProfileName}): ${this.organisms.length} founder organisms across ${speciesCount} lineages — ${profile.explanation}`,
+      )
+    }
+    this.lastPopulation = this.organisms.length
+    this.lastBiomass = this.cachedTotalBiomass
+    this.lastDominantSpeciesId = this.registry.getDominant()?.id ?? null
+    this.captureSpeciesPopulations()
+  }
+
+  /** Fallback seeding when origin profile has no sites. */
+  private seedInitialLifeLegacy(world: World, emit: LifeEventEmitter): void {
     const spawnRng = forkRng(this.seed, 'life-seed')
     let seeded = 0
 
@@ -112,7 +150,7 @@ export class LifeSystem {
       if (seeded >= 64) break
       if (!isTileActive(world, tile.x, tile.y)) continue
       if (
-        (tile.terrain === 'grassland' || tile.terrain === 'forest' || tile.terrain === 'swamp') &&
+        (tile.terrain === 'grassland' || tile.terrain === 'forest' || tile.terrain === 'swamp' || tile.terrain === 'marsh') &&
         tile.soilFertility > 0.35 &&
         tile.water > 0.25 &&
         spawnRng() > 0.96
@@ -140,11 +178,44 @@ export class LifeSystem {
     this.captureSpeciesPopulations()
   }
 
+  /** Disaster: reduce biomass on a tile; returns organisms killed. */
+  applyBiomassStress(world: World, tileIndex: number, burnFactor: number): number {
+    const w = world.width
+    const x = tileIndex % w
+    const y = Math.floor(tileIndex / w)
+    let killed = 0
+    for (const organism of this.organisms) {
+      if (organism.x !== x || organism.y !== y) continue
+      if (this.tickRng() < burnFactor) {
+        organism.health -= 0.4 + burnFactor * 0.5
+        if (organism.health <= 0) killed += 1
+      } else {
+        organism.health -= burnFactor * 0.15
+      }
+    }
+    return killed
+  }
+
+  /** Disaster: apply extra mortality pressure on a tile. */
+  applyMortalityPressure(world: World, tileIndex: number, pressure: number): number {
+    const w = world.width
+    const x = tileIndex % w
+    const y = Math.floor(tileIndex / w)
+    let killed = 0
+    for (const organism of this.organisms) {
+      if (organism.x !== x || organism.y !== y) continue
+      organism.health -= pressure
+      if (organism.health <= 0 || organism.energy <= 0) killed += 1
+    }
+    return killed
+  }
+
   tick(world: World, tick: number, emit: LifeEventEmitter, suppressMinorEvents = false): void {
     this.tickRng = forkRng(this.seed, `life-tick-${tick}`)
     this.syncLiveTileCounts()
     const deaths: string[] = []
     const births: LifeOrganism[] = []
+    let birthsThisTick = 0
     const prePopulation = this.organisms.length
     const preSpeciesIds = suppressMinorEvents
       ? null
@@ -180,11 +251,13 @@ export class LifeSystem {
       if (
         organism.energy >= REPRODUCTION_ENERGY_THRESHOLD &&
         organism.reproductionCooldown <= 0 &&
-        this.organisms.length + births.length < MAX_TOTAL_ORGANISMS
+        this.organisms.length + births.length < MAX_TOTAL_ORGANISMS &&
+        birthsThisTick < MAX_BIRTHS_PER_TICK
       ) {
         const child = this.tryReproduce(organism, world, tick, emit, suppressMinorEvents)
         if (child) {
           births.push(child)
+          birthsThisTick += 1
           organism.energy -= REPRODUCTION_ENERGY_COST
           organism.reproductionCooldown = Math.round(18 / Math.max(0.12, organism.genome.reproductionRate))
           if (!suppressMinorEvents) {
@@ -219,6 +292,8 @@ export class LifeSystem {
 
     this.organisms.push(...births)
     this.rebuildTileIndex(world)
+    this.lastTickBirths = births.length
+    this.lastTickDeaths = deaths.length
 
     if (births.length > 0 && !suppressMinorEvents) {
       if (!this.firstReproductionLogged) {
@@ -248,6 +323,22 @@ export class LifeSystem {
       this.tick(world, t, NOOP_EMIT, true)
     }
     return t
+  }
+
+  getOrganismCount(): number {
+    return this.organisms.length
+  }
+
+  getLastTickVitals(): { births: number; deaths: number } {
+    return { births: this.lastTickBirths, deaths: this.lastTickDeaths }
+  }
+
+  getMaxTileOrganismCount(): number {
+    let max = 0
+    for (const count of this.tileCounts) {
+      if (count > max) max = count
+    }
+    return max
   }
 
   quarantineInvalid(world: World): number {
@@ -545,6 +636,13 @@ export class LifeSystem {
   private captureSpeciesPopulations(): void {
     for (const species of this.registry.getAll()) {
       this.speciesPopHistory.set(species.id, species.population)
+    }
+    if (this.speciesPopHistory.size > MAX_SPECIES_POP_HISTORY) {
+      const alive = new Set(this.registry.getAll().map((s) => s.id))
+      for (const id of this.speciesPopHistory.keys()) {
+        if (!alive.has(id)) this.speciesPopHistory.delete(id)
+        if (this.speciesPopHistory.size <= MAX_SPECIES_POP_HISTORY) break
+      }
     }
   }
 

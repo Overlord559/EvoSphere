@@ -40,7 +40,9 @@ EvoSphere is a client-only single-page application. Simulation logic lives under
 | `src/simulation/life/` | Organism tick orchestration |
 | `src/simulation/agents/` | Mobile agent tick orchestration (v0.4) |
 | `src/simulation/behavior/` | Mobile goal selection and movement |
-| `src/simulation/ecology/` | Energy, colonization, herbivory, predation, food web |
+| `src/simulation/disasters/` | Natural disaster types, effects, tick system (v0.5.3) |
+| `src/simulation/engine/eraPacing.ts` | Era-inferred pacing profiles + Auto Pace speed selection |
+| `src/simulation/world/originProfiles.ts` | Deterministic varied founder-life origin profiles |
 | `src/ui/panels/` | Command-center side panels |
 | `src/ui/viewport/` | Pixi canvas host, organic biome renderer, creature/plant glyphs, visual genes |
 
@@ -86,7 +88,137 @@ Same `SimulationSettings` (seed, width, height) always yields identical `Tile[]`
 
 Deep-time buttons convert years → ticks via `yearsToTicks()`. Summaries report start/end tick and year.
 
-## Runtime Loop (v0.4.3)
+## Deep-Time Pacing (v0.5.3)
+
+| Era phase | Auto Pace speed | Batch multiplier |
+|-----------|-----------------|------------------|
+| Abiogenesis / Microbial | Ultra Fast | 3× |
+| Multicellular | Super Fast | 2.5× |
+| Complex Ecosystem | Fast | 2× |
+| Proto-Sentient+ (scaffold) | Normal | ≤1× |
+
+Auto Pace infers phase from life/agent state — no civilization fields yet. Manual Live/Fast/Super/Ultra override Auto Pace.
+
+## Natural Disasters (v0.5.3)
+
+```
+DisasterSystem
+  ├── inject / random / tick lifecycle
+  ├── tile stress (water, fertility, temperature, biomass burn, mortality)
+  ├── life + agent mortality/biomass effects
+  └── throttled event log (disaster.started, disaster.ended, disaster.mass_dieoff, …)
+```
+
+Disasters alter real simulation state — drought lowers water, wildfire burns biomass, ice pulse shifts biomes where feasible.
+
+## Origin Profiles (v0.5.3)
+
+Each generated world stores `world.originProfile` with founder tile IDs, biome types, energy sources, and explanation for Briefing/event log. Same seed → same profile; different seeds → varied origins.
+
+## Runtime Loop (v0.5.2)
+
+```
+Main thread                          Worker thread (default)
+────────────                         ────────────────────────
+React UI + Zustand                   SimEngine + world + life + agents
+Pixi render (snapshot consumer)  ←── compact snapshots (typed arrays, backpressure)
+Input / camera / inspection          Deep time + QA benchmarks
+Animation RAF (animated layers only) Worker speed schedules + snapshot rate cap
+```
+
+### Crash root cause (v0.5.2)
+
+Normal-speed browser crash at ~simulated year 4 was **not** simulation runaway (headless QA reaches year 10 with ~109 organisms). It was a **Pixi render leak**:
+
+1. Animation RAF called full redraw every frame with `force=true`
+2. Each redraw created new `Graphics()` objects per layer
+3. `clearLayer()` used `removeChildren()` without `destroy()` → GPU resources accumulated until tab death
+
+Fix: persistent layer `Graphics` cleared with `.clear()`; terrain redraw only on world change or snapshot; animated layers on RAF only.
+
+### Snapshot backpressure (v0.5.2)
+
+| Mechanism | Location |
+|-----------|----------|
+| Max 2 pending snapshots on main | `workerClient.ts`, `MAX_PENDING_SNAPSHOTS` |
+| Latest-wins drop when UI behind | `workerClient.ts` queue |
+| Worker snapshots/sec cap (20) | `simWorker.ts`, `MAX_WORKER_SNAPSHOTS_PER_SEC` |
+| `snapshotConsumed` ack | worker ↔ main protocol |
+| HMR worker terminate | `simulationStore.ts` `import.meta.hot.dispose` |
+
+### Long-run soak telemetry (v0.5.2b)
+
+| Mechanism | Location |
+|-----------|----------|
+| Rolling heap trend + birth/death intervals | `soakTelemetry.ts` |
+| Soak Debug HUD + warnings | `SoakDebugHUD.tsx`, `WorldViewport.tsx` |
+| Terrain/glyph cache bounds + destroy on reset | `renderCache.ts`, `stabilityGuards.ts` |
+| RAF/worker singleton guards | `lifecycleGuards.ts` |
+| Headless yr-25 table | `scripts/qa-longrun.ts` |
+
+### Focus / camera modes (v0.5.2b)
+
+| Mode | Behavior |
+|------|----------|
+| `free` | User pan/zoom; planet bounds clamp |
+| `focused_tile` | One-shot zoom on tile select |
+| `focused_species` | One-shot zoom on species Focus |
+| `following_species` | Soft pan to species centroid via `followPanTarget` (not focus-request spam) |
+| `inspecting_agent` | Agent click on tile |
+
+Manual pan/wheel sets `userCameraOverride` and disables follow unless **Locked follow** is on. ESC + Exit Focus return to free mode and reset camera.
+
+### Secondary crash root cause (v0.5.2b)
+
+Follow-selected-species called `focusTile()` on every snapshot refresh, incrementing `cameraFocusSeq` and forcing camera jumps — trapping the user and adding main-thread churn alongside render work. Fixed by soft follow pan in viewport RAF + explicit escape controls.
+
+### Rust/WASM decision gate (v0.5.2 evidence)
+
+| Option | Recommendation |
+|--------|----------------|
+| TypeScript worker + bug fix + SoA Phase B | **BUILD NOW** — crash was render/leak; lifeTick still top bottleneck (87%) but sim is stable |
+| Rust/WASM hot-loop port | **SPIKE ONLY** after SoA Phase B if lifeTick still >70% — not justified for render leaks |
+| Bevy native rewrite | **DEFER** — rewrite path, not patch; only if standalone game becomes goal |
+| Bevy web/WASM | **DEFER** — same as native unless browser demo abandoned |
+
+## Runtime Loop (v0.5.1)
+
+```
+Main thread                          Worker thread (default)
+────────────                         ────────────────────────
+React UI + Zustand                   SimEngine + world + life + agents
+Pixi render (snapshot consumer)  ←── compact snapshots (typed arrays)
+Input / camera / inspection          Deep time + QA benchmarks
+Animation RAF (display FPS)          Worker speed schedules (higher batch)
+```
+
+- **`WORKER_SIMULATION_ENABLED`** — `src/simulation/config/simConfig.ts`; falls back to v0.4.3 main-thread loop if worker fails
+- **Worker protocol** — `workerTypes.ts`, `workerProtocol.ts`, `simWorker.ts`, `workerClient.ts`
+- **Snapshot codec** — render / inspector / full / deep-time summary modes; avoids shipping every organism object each frame
+- **Performance profiler** — `performanceProfiler.ts` tracks lifeTick, agentTick, snapshotBuild, briefingBuild, renderRedraw
+- Main-thread fallback retains **time-budgeted stepping** (`simScheduler.ts`) from v0.4.3
+
+| Speed | Main thread (fallback) | Worker (default) |
+|-------|--------------------------|------------------|
+| Normal | 1 tick/frame, full snapshots | 2 ticks/loop, snapshot ~50ms |
+| Fast | ~4 ticks/frame budget | 12 ticks/loop |
+| Super Fast | ~8 ticks/frame budget | 48 ticks/loop, lighter briefing |
+| Ultra Fast | ~12 ticks/frame budget | 160 ticks/loop, progress throttling only |
+
+High-speed modes are **sim batch multipliers**, not render-frame multipliers. Visual playback uses interpolation between throttled snapshots.
+
+## Rust/WASM escalation path (not step one)
+
+| Phase | Scope |
+|-------|--------|
+| A | TypeScript Worker + compact snapshots **(v0.5.1 — current)** |
+| B | Typed-array ECS / full Agent SoA tick migration |
+| C | Rust/WASM hot loops for LifeSystem / AgentSystem / SenseSystem if profiling proves TS worker ceiling |
+| D | WebGPU compute or native Bevy only if browser ceiling blocks project goals |
+
+Profile before rewrite. Language switch is escalation, not first move.
+
+## Runtime Loop (v0.4.3 — fallback path)
 
 - `SimEngine` owns all mutation; ticks are **internal only**
 - Zustand `requestAnimationFrame` loop uses **time-budgeted stepping** (`simScheduler.ts`)
