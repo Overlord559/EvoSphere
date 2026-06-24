@@ -2,9 +2,29 @@
 
 Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, mobile agents with predation, circular planet viewport, and Spore-inspired procedural Pixi rendering.
 
-**Current phase:** v0.5.4 Proto-Cognition + Ecological Succession + Adaptive Radiation
+**Current phase:** v0.5.4c Population Cap Architecture + Adaptive Carrying Capacity
 
 ## Status
+
+v0.5.4c population architecture (2026-06-24):
+
+- **Aggregate vs tracked population** — producers and mobile agents continue growing in aggregate pools when tracked individual budget is full; ecology drives limits, not legacy 5000/800 globals
+- **Adaptive carrying capacity** — `ecology/carryingCapacity.ts` computes per-tile and world capacity from habitat, succession, biomass, stress, and trophic role
+- **Population config** — world-size-scaled `maxTrackedIndividuals`, `maxTrackedAgents`, `maxRenderedAgents`, safety ceilings
+- **Bottleneck taxonomy** — distinguishes artificial cap pressure, ecological bottleneck, carrying-capacity plateau, expansion failure
+- **Cap-pressure events** — `population.capacity_pressure`, `population.expansion_wave`, `evolution.competition_pressure`, `evolution.niche_expansion`
+- **UI** — Briefing population architecture block; Soak HUD shows tracked+aggregate, capacity %, repr-cap flag
+- **QA** — `npm run qa:population` verifies no legacy cap stall, bounded tracked entities, aggregate growth
+- **Blocked until soak passes:** v0.6 Communication + Social Learning
+
+v0.5.4b hardening pass (2026-06-24):
+
+- **Deterministic IDs** — monotonic `deterministicId.ts` replaces `nanoid` in sim-critical paths; reset replay exact match
+- **Worker disaster settings sync** — `setDisasterSettings` message; UI changes apply in worker mode
+- **Soak HUD expanded** — tick, FPS, heap, orgs/agents/species/variants, succession %, disasters, worker/main path, dis-sync
+- **Disaster pacing messages** — cooldown active, safe mode refugia, developments feed
+- **Variant hardening** — tighter speciation thresholds; sorted registry iteration for tie-breaks
+- **QA** — `npm run qa:determinism` added; evolution QA requires exact reset replay
 
 v0.5.4 proto-cognition + ecological succession + adaptive radiation (2026-06-24):
 
@@ -93,7 +113,7 @@ Tools, culture, civilization, and 3D remain out of scope.
 - **Viewport** — culling + LOD + circular planet (Pixi.js primitives)
 - Zustand (UI + session state + time-budgeted runtime loop)
 - seedrandom (deterministic RNG)
-- nanoid (entity/species/event IDs)
+- deterministic monotonic IDs in sim paths (`src/utils/deterministicId.ts`); nanoid retained only where non-sim UI needs it
 
 ## Commands
 
@@ -109,11 +129,17 @@ npm run qa:longrun
 npm run qa:worldgen
 npm run qa:succession
 npm run qa:evolution
+npm run qa:determinism
+npm run qa:population
 ```
 
-## Manual browser QA (v0.5.2b)
+## Manual browser QA (v0.5.4c)
 
-**Soak:** `npm run dev` → Standard 192×192, worker on, organic on → Normal to yr 10 → Fast 5 min → Super Fast 3 min → Ultra Fast 1 min. Watch Soak HUD: Pixi gfx stable (~6), pending snap ≤2, worker=1, RAF=1, heap trend flat, crash risk low/medium.
+**Population:** Algae/bio population should exceed ~5,000 aggregate when habitat supports it; tracked organisms stay bounded; Soak HUD shows `orgs tracked+aggregate` and `cap %`. If growth stops, Briefing should explain ecological vs representation cap.
+
+**Soak:** `npm run dev` → Standard 192×192, worker on, organic on → Normal 10 min → Fast 10 min → Super Fast 5 min → Ultra Fast 2 min → Deep Time +1K (cancel once) → inject one moderate wildfire/drought → inspect cognition card → clear/focus species → zoom/pan → reset same seed. Watch Soak HUD: tick/yr/FPS, heap trend flat, bio pop can grow past legacy caps, pending snap ≤2, worker=1, RAF=1, succession % climbing, repr-cap when tracked budget full.
+
+**Determinism:** After reset with same seed, population/species counts should match prior run (headless gate: `npm run qa:determinism`).
 
 **Focus escape:** Focus species/tile → zoom in → manual zoom out → Exit Focus → Stop Following → Reset Camera → ESC → Fit Planet. Sim keeps running unless Pause while inspecting is on.
 

@@ -59,13 +59,18 @@ function runPhase(speed: SimSpeed, targetSeconds: number, fps = 60): PhaseResult
     pass = false
     notes.push(`event log exceeded cap: ${snap.events.length}`)
   }
-  if (snap.agents.totalAgents > 800) {
+  if (snap.agents.totalAgents > 1200) {
     pass = false
-    notes.push(`agent cap risk: ${snap.agents.totalAgents}`)
+    notes.push(`tracked agent safety exceeded: ${snap.agents.totalAgents}`)
   }
-  if (snap.life.totalOrganisms > 8000) {
+  if (snap.life.totalOrganisms > 12000) {
     pass = false
-    notes.push(`organism cap risk: ${snap.life.totalOrganisms}`)
+    notes.push(`tracked organism safety exceeded: ${snap.life.totalOrganisms}`)
+  }
+  const bioPop = snap.life.totalBiologicalPopulation + snap.agents.totalMobilePopulation
+  if (bioPop > 50000 || !Number.isFinite(bioPop)) {
+    pass = false
+    notes.push(`runaway biological population: ${bioPop}`)
   }
 
   for (const agent of snap.agents.agents.slice(0, 50)) {

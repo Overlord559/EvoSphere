@@ -91,6 +91,22 @@ export interface BriefingSnapshot {
   protoCognitionSummary: string | null
   /** Disaster pacing summary for UI. */
   disasterPacingSummary: string | null
+  /** Population architecture summary for briefing/UI. */
+  populationArchitecture: PopulationArchitectureBriefing | null
+}
+
+export interface PopulationArchitectureBriefing {
+  trackedOrganisms: number
+  aggregateOrganisms: number
+  trackedAgents: number
+  agentReserve: number
+  worldCarryingCapacity: number
+  capacityPressurePct: number
+  expansionPressurePct: number
+  artificialCapEngaged: boolean
+  representationCapped: boolean
+  bottleneckKind: string | null
+  plateauExplanation: string | null
 }
 
 export interface SuccessionOverview {

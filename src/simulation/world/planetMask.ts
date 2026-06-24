@@ -68,6 +68,15 @@ export function isTileActiveIndex(world: World, idx: number): boolean {
   return world.activeMask[idx] ?? false
 }
 
+/** Count of active (in-planet) tiles — used for population scaling. */
+export function countActiveTiles(world: World): number {
+  let count = 0
+  for (let i = 0; i < world.activeMask.length; i++) {
+    if (world.activeMask[i]) count += 1
+  }
+  return count
+}
+
 /** Edge falloff 0..1 — higher near rim (ocean bias). */
 export function planetEdgeFalloff(x: number, y: number, geometry: PlanetGeometry): number {
   const norm = normalizedPlanetDistance(x, y, geometry)

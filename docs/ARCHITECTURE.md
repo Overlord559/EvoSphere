@@ -31,7 +31,7 @@ EvoSphere is a client-only single-page application. Simulation logic lives under
 | Path | Responsibility |
 |------|----------------|
 | `src/types/` | Shared TypeScript contracts |
-| `src/utils/` | RNG and cross-cutting utilities |
+| `src/utils/` | RNG, deterministic monotonic IDs |
 | `src/store/` | Zustand UI / session state + engine bridge + runtime loop |
 | `src/simulation/engine/` | Tick loop, deep time, snapshot assembly, event log |
 | `src/simulation/engine/simTime.ts` | Tick ↔ year ↔ generation mapping |
@@ -146,6 +146,18 @@ No external AI. Reinforcement on meaningful events only.
 ## Speciation Pipeline (v0.5.4)
 
 Variant → subspecies → species via `evaluateBranchCandidate()` — local fitness, founder group, establishment grace, failed variants marked quietly.
+
+## Determinism + Reset Replay (v0.5.4b)
+
+Sim-critical IDs use monotonic counters in `src/utils/deterministicId.ts` (reset on `SimEngine` construct + reset). Mutation RNG forks use `{speciesId, x, y, generation, tick}` — not entity IDs from `nanoid`.
+
+Registry iteration for establishment and genome matching sorts by species id for stable tie-breaks. Event log timestamps use sim tick (not `Date.now()`).
+
+Headless gate: `npm run qa:determinism` — 5000 ticks, compares organisms/agents/biomass/species/disasters between first run, reset replay, and fresh engine.
+
+## Worker Disaster Settings Sync (v0.5.4b)
+
+`MainToWorkerMessage.setDisasterSettings` → `workerClient.setDisasterSettings()` → `simWorker` applies to `DisasterSystem.setSettings()`. Store syncs on UI change and after worker bootstrap. Soak HUD shows `dis-sync @tick` when synced.
 
 ## Origin Profiles (v0.5.3)
 
@@ -353,7 +365,7 @@ AgentSystem
   └── tick() — hunger → goal → move/graze/hunt → death → reproduction
 ```
 
-Population controls: max 3 agents/tile, max 800 globally.
+Population controls: max 3 agents/tile (tracked). **v0.5.4c:** mobile reserve pools when tracked budget full; legacy 800 cap demoted.
 
 | Path | Role |
 |------|------|
@@ -423,7 +435,26 @@ Modules:
 | `simulation/species/speciesRegistry.ts` | Species tracking + founder lineages |
 | `simulation/species/speciesOccupancy.ts` | Occupancy index + threat heuristics |
 
-Population controls: max 4 organisms/tile, max 5000 total.
+Population controls: max 4 organisms/tile (tracked), max 3 agents/tile (tracked). **v0.5.4c:** global 5000/800 caps demoted to legacy reference; growth limited by `carryingCapacity.ts` + aggregate pools (`aggregatePopulation.ts`) when tracked budget full. Render draw caps unchanged (400–800 agents).
+
+## v0.5.4c — Population architecture
+
+| Layer | Role |
+|-------|------|
+| **Biological population** | Tracked individuals + aggregate pools — drives ecology, speciation, food web |
+| **Tracked individuals** | Performance budget (`populationConfig.ts`) — representative organisms/agents |
+| **Rendered entities** | Pixi draw caps — LOD/culling only |
+
+Key paths:
+
+| Path | Role |
+|------|------|
+| `simulation/ecology/carryingCapacity.ts` | Dynamic per-tile and world carrying capacity |
+| `simulation/ecology/aggregatePopulation.ts` | Aggregate producer/mobile pools |
+| `simulation/ecology/populationConfig.ts` | World-size-scaled budgets |
+| `simulation/evolution/bottleneckRecovery.ts` | Bottleneck kind taxonomy |
+
+Headless gates: `npm run qa:population` · `npm run qa:determinism` (5000 ticks, biological + tracked fingerprint)
 
 ## Pixi Viewport (v0.4.1)
 

@@ -9,11 +9,16 @@ import {
   AGENT_REPRODUCTION_COST,
   AGENT_REPRODUCTION_ENERGY,
   MAX_AGENTS_PER_TILE,
-  MAX_TOTAL_AGENTS,
 } from '../../types/agents'
 import type { World } from '../../types/simulation'
 import type { Rng } from '../../utils/rng'
 import { forkRng } from '../../utils/rng'
+import { AggregatePopulationStore } from '../ecology/aggregatePopulation'
+import {
+  getTileCarryingCapacity,
+  type CarryingCapacityContext,
+} from '../ecology/carryingCapacity'
+import { buildPopulationConfig, type PopulationArchitectureConfig } from '../ecology/populationConfig'
 import {
   chooseAgentGoal,
   goalTargetReason,
@@ -72,6 +77,9 @@ export class AgentSystem {
     localExtinctions: 0,
   }
   private lastWorld: World | null = null
+  private readonly populationReserve = new AggregatePopulationStore()
+  private popConfig: PopulationArchitectureConfig | null = null
+  private capacityEventCooldown = 0
   private recoveryMods: RecoveryModifiers = {
     reproductionBoost: 1,
     dispersalBoost: 1,
@@ -83,7 +91,31 @@ export class AgentSystem {
     this.seed = seed
     this.life = life
     this.tickRng = forkRng(seed, 'agents')
+    this.popConfig = buildPopulationConfig(world)
+    this.populationReserve.init(world)
     this.initTileArrays(world)
+  }
+
+  getMobileBiologicalPopulation(): number {
+    return this.agents.length + this.populationReserve.getTotalCount()
+  }
+
+  private getPopConfig(): PopulationArchitectureConfig {
+    if (this.popConfig) return this.popConfig
+    return {
+      maxTrackedIndividuals: 4000,
+      maxTrackedAgents: 600,
+      maxRenderedAgents: 800,
+      aggregatePopulationEnabled: true,
+      populationScaleByWorldArea: true,
+      safetyOrganismCeiling: 25000,
+      safetyAgentCeiling: 2000,
+      activeTileCount: 6000,
+    }
+  }
+
+  private buildAgentCapacityContext(world: World): CarryingCapacityContext {
+    return this.life.buildCapacityContext(world, this.tileAgentCounts)
   }
 
   setRecoveryModifiers(mods: RecoveryModifiers): void {
@@ -271,18 +303,19 @@ export class AgentSystem {
         agent.health > 0.55 &&
         agent.hunger < 0.5 &&
         agent.reproductionCooldown <= 0 &&
-        fitness.reproductionMultiplier > 0.45 * this.recoveryMods.reproductionBoost &&
-        this.agents.length + births.length < MAX_TOTAL_AGENTS
+        fitness.reproductionMultiplier > 0.45 * this.recoveryMods.reproductionBoost
       ) {
         const child = this.tryReproduce(agent, world, tick, emit, suppressMinorEvents)
         if (child) {
-          births.push(child)
+          if (child !== 'reserve') {
+            births.push(child)
+          }
           agent.energy -= AGENT_REPRODUCTION_COST
           agent.reproductionCooldown = Math.round(28 / Math.max(0.12, agent.genome.reproductionRate))
-          if (!suppressMinorEvents) {
+          if (!suppressMinorEvents && child !== 'reserve') {
             emit(
               'agent.reproduced',
-              `${agent.kind} reproduced — population ${this.agents.length + births.length}`,
+              `${agent.kind} reproduced — tracked ${this.agents.length + births.length}, reserve ${this.populationReserve.getTotalCount()}`,
             )
           }
         }
@@ -295,6 +328,28 @@ export class AgentSystem {
     }
     this.agents.push(...births)
     this.rebuildIndexes(world)
+
+    const ctx = this.buildAgentCapacityContext(world)
+    this.populationReserve.tickMobileReserve(
+      world,
+      ctx,
+      forkRng(this.seed, `mob-reserve-${tick}`),
+      this.recoveryMods.reproductionBoost,
+    )
+
+    if (!suppressMinorEvents && this.capacityEventCooldown <= 0) {
+      const config = this.getPopConfig()
+      const trackedAtCap = this.agents.length >= config.maxTrackedAgents * 0.95
+      const reserveCount = this.populationReserve.getTotalCount()
+      if (trackedAtCap && reserveCount > 0) {
+        this.capacityEventCooldown = 500
+        emit(
+          'population.capacity_pressure',
+          `Mobile population representation-capped; ${reserveCount} agents continue in aggregate reserve.`,
+        )
+      }
+    }
+    if (this.capacityEventCooldown > 0) this.capacityEventCooldown -= 1
 
     if (!suppressMinorEvents) {
       this.detectFoodWebEvents(emit, preGrazers, prePredators)
@@ -364,14 +419,30 @@ export class AgentSystem {
           )
         : {}
 
+    const reserveCount = this.populationReserve.getTotalCount()
+    const reserveBiomass = this.populationReserve.getTotalBiomass()
+    const mobileBioPop = this.getMobileBiologicalPopulation()
+
+    let reserveGrazers = 0
+    let reservePredators = 0
+    let reserveScavengers = 0
+    for (const entry of this.populationReserve.getSnapshot().topPools) {
+      if (entry.kind === 'SimpleGrazer') reserveGrazers += entry.count
+      else if (entry.kind === 'SimplePredator') reservePredators += entry.count
+      else if (entry.kind === 'Scavenger') reserveScavengers += entry.count
+    }
+
     return {
       agents: includeAgents ? [...this.agents] : [],
       totalAgents: this.agents.length,
-      totalBiomass,
+      populationReserve: reserveCount,
+      totalMobilePopulation: mobileBioPop,
+      totalBiomass: totalBiomass + reserveBiomass,
+      reserveBiomass,
       tileAgentCounts: [...this.tileAgentCounts],
-      grazerCount,
-      predatorCount,
-      scavengerCount,
+      grazerCount: grazerCount + reserveGrazers,
+      predatorCount: predatorCount + reservePredators,
+      scavengerCount: scavengerCount + reserveScavengers,
       foodWebLinks: this.foodWeb.getLinks().slice(0, 24),
       dominantGrazerSpeciesId: registry.getDominantByRole('grazer')?.id ?? null,
       dominantPredatorSpeciesId: registry.getDominantByRole('predator')?.id ?? null,
@@ -397,6 +468,9 @@ export class AgentSystem {
 
   reset(world: World, emit: AgentEventEmitter): void {
     this.agents = []
+    this.populationReserve.clear()
+    this.popConfig = buildPopulationConfig(world)
+    this.populationReserve.init(world)
     this.foodWeb.clear()
     this.tickRng = forkRng(this.seed, 'agents')
     this.recentActivityTiles.clear()
@@ -531,12 +605,27 @@ export class AgentSystem {
     tick: number,
     emit: AgentEventEmitter,
     suppressMinorEvents: boolean,
-  ): MobileAgent | null {
+  ): MobileAgent | 'reserve' | null {
     if (this.tickRng() > parent.genome.reproductionRate * 0.5 * parent.environmentalFitness + 0.2) return null
-    if (this.countAtTile(parent.x, parent.y, world) >= MAX_AGENTS_PER_TILE) return null
+
+    const popConfig = this.getPopConfig()
+    const ctx = this.buildAgentCapacityContext(world)
+    const tile = getTileAt(world, parent.x, parent.y)
+    if (!tile) return null
+
+    const tileIdx = parent.y * world.width + parent.x
+    const tileOcc = this.countAtTile(parent.x, parent.y, world) + this.populationReserve.getTileCount(tileIdx)
+    const tileCap = getTileCarryingCapacity(tile, parent.kind, ctx, parent.genome)
+    if (tileCap <= 0 || tileOcc >= tileCap) return null
+
+    const mobileBio = this.getMobileBiologicalPopulation()
+    if (mobileBio >= popConfig.safetyAgentCeiling) return null
 
     const registry = this.life.getRegistry()
-    const mutRng = forkRng(this.seed, `agent-mut-${parent.id}-${tick}`)
+    const mutRng = forkRng(
+      this.seed,
+      `agent-mut-${parent.speciesId}-${parent.x}-${parent.y}-${parent.generation}-${tick}`,
+    )
     const { genome: childGenome, bodyPlan: childBodyPlan } = mutateMobileAgentTraits(
       parent.genome,
       parent.bodyPlan,
@@ -547,23 +636,20 @@ export class AgentSystem {
     const childGeneration = parent.generation + 1
     const parentPop = registry.getPopulation(parent.speciesId)
 
-    const tile = getTileAt(world, parent.x, parent.y)
-    if (!tile) return null
-
-    const config = DEFAULT_SPECIATION_CONFIG
+    const specConfig = DEFAULT_SPECIATION_CONFIG
     const branch = evaluateBranchCandidate(
       parent.genome,
       childGenome,
       tile,
       childGeneration,
       parentPop,
-      config,
+      specConfig,
       tick - (registry.get(parent.speciesId)?.createdAtTick ?? tick),
       1,
     )
 
     if (branch.shouldBranch) {
-      const existing = registry.findByGenome(parent.kind, childGenome, config.geneticDistanceVariantThreshold)
+      const existing = registry.findByGenome(parent.kind, childGenome, specConfig.geneticDistanceVariantThreshold)
       if (existing && existing.establishmentStatus !== 'failed') {
         speciesId = existing.id
       } else {
@@ -587,9 +673,17 @@ export class AgentSystem {
             adaptiveRadiationMessage(branch.rank, parent.kind, branch.reason, tick),
           )
         } else if (!suppressMinorEvents && branch.rank === 'variant' && this.tickRng() > 0.85) {
-          emit('evolution.ecotype_emerged', adaptiveRadiationMessage('variant', parent.kind, branch.reason, tick))
+          emit('evolution.niche_expansion', adaptiveRadiationMessage('variant', parent.kind, branch.reason, tick))
         }
       }
+    }
+
+    const trackedAtCap = this.agents.length >= popConfig.maxTrackedAgents
+    const tileIndividuals = this.countAtTile(parent.x, parent.y, world)
+    if (trackedAtCap || tileIndividuals >= MAX_AGENTS_PER_TILE) {
+      if (!popConfig.aggregatePopulationEnabled) return null
+      this.populationReserve.addPopulation(speciesId, parent.kind, tileIdx, 1)
+      return 'reserve'
     }
 
     const child = createAgent(
@@ -600,7 +694,7 @@ export class AgentSystem {
       childGenome,
       childGeneration,
       childBodyPlan,
-      `${this.seed}-child-${parent.id}-${tick}`,
+      `${this.seed}-child-${parent.speciesId}-${parent.x}-${parent.y}-${parent.generation}-${tick}`,
     )
     if (parent.controller && child.controller) {
       child.controller = mutateController(parent.controller, () => mutRng(), parent.genome.mutationRate)
@@ -619,8 +713,18 @@ export class AgentSystem {
     registry: SpeciesRegistry,
   ): void {
     if (!isTileActive(world, x, y)) return
-    if (this.countAtTile(x, y, world) >= MAX_AGENTS_PER_TILE) return
-    if (this.agents.length >= MAX_TOTAL_AGENTS) return
+    const popConfig = this.getPopConfig()
+    const idx = y * world.width + x
+    if (this.countAtTile(x, y, world) + this.populationReserve.getTileCount(idx) >= MAX_AGENTS_PER_TILE) return
+    if (this.getMobileBiologicalPopulation() >= popConfig.safetyAgentCeiling) return
+
+    if (this.agents.length >= popConfig.maxTrackedAgents) {
+      if (!popConfig.aggregatePopulationEnabled) return
+      const founder = createFounderAgent(kind, '', x, y)
+      const species = registry.getOrCreateFounderSpecies(kind, founder.genome, tick)
+      this.populationReserve.addPopulation(species.id, kind, idx, 1)
+      return
+    }
 
     const founder = createFounderAgent(kind, '', x, y)
     const species = registry.getOrCreateFounderSpecies(kind, founder.genome, tick)
@@ -672,6 +776,13 @@ export class AgentSystem {
       stats.count += 1
       stats.biomass += agent.biomass
       combined.set(agent.speciesId, stats)
+    }
+
+    for (const [speciesId, reserveStats] of this.populationReserve.getPopulationMap()) {
+      const stats = combined.get(speciesId) ?? { count: 0, biomass: 0 }
+      stats.count += reserveStats.count
+      stats.biomass += reserveStats.biomass
+      combined.set(speciesId, stats)
     }
 
     const registry = this.life.getRegistry()

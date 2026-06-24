@@ -22,7 +22,29 @@ Evolution and emergence are fascinating but hard to explore interactively. Most 
 4. **Browser-first** — no install, no backend, IndexedDB for persistence later
 5. **Honest scope** — no fake data, no dead controls, no spectacle without substance
 
-## v0.5.4 Proto-Cognition + Ecological Succession + Adaptive Radiation ✅ (current)
+## v0.5.4c Population Cap Architecture + Adaptive Carrying Capacity ✅ (current)
+
+- Aggregate vs tracked population — ecology continues in pools when representation budget full
+- Dynamic carrying capacity from habitat, succession, biomass, trophic role
+- Bottleneck detector distinguishes artificial cap vs ecological plateau
+- Soak HUD + Briefing expose capacity pressure and aggregate counts
+- v0.6 Communication blocked until browser soak passes
+
+## v0.5.4b Browser Soak + Determinism + Worker Disaster Sync ✅
+
+Delivered:
+
+- Deterministic monotonic IDs for organisms, agents, species, disasters, events, world (`deterministicId.ts`)
+- Reset replay exact match — root cause was `nanoid` IDs leaking into mutation RNG forks and global ID counter drift across engine instances
+- Worker disaster settings sync — `setDisasterSettings` worker message + store bridge
+- Expanded Soak HUD for browser long-run validation
+- Disaster pacing UX messages (cooldown, safe mode refugia)
+- Variant speciation threshold tuning + sorted registry iteration
+- QA: `npm run qa:determinism`
+
+Next phase: **v0.6 Communication + Social Learning** after manual browser soak sign-off.
+
+## v0.5.4 Proto-Cognition + Ecological Succession + Adaptive Radiation ✅
 
 Delivered:
 

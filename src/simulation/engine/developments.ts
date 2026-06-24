@@ -195,5 +195,48 @@ export function buildLatestDevelopments(
     push('A cold pulse expanded tundra into mountain valleys.', 'info')
   }
 
+  const settings = disasters.settings
+  if (settings && out.length < 8) {
+    const yr = tickToYears(tick)
+    if (
+      disasters.lastMajorDisasterYear != null &&
+      disasters.lastMajorDisasterYear > 0 &&
+      yr - disasters.lastMajorDisasterYear < settings.minimumYearsBetweenMajorDisasters
+    ) {
+      push('Major disaster cooldown active — pacing holding severity down.', 'info')
+    }
+    if (settings.disasterSafeMode && disasters.active.length > 0) {
+      push('Safe mode preserving refugia in stressed tiles.', 'info')
+    }
+  }
+
+  const capEvent = events.find(
+    (e) =>
+      e.type === 'population.capacity_pressure' ||
+      e.type === 'population.expansion_wave' ||
+      e.type === 'evolution.local_specialization',
+  )
+  if (capEvent && out.length < 8) {
+    push(capEvent.message, capEvent.type.includes('expansion') ? 'positive' : 'info')
+  }
+
+  const popArch = life.populationArchitecture
+  if (popArch.representationCapped && out.length < 8) {
+    push(
+      `Scavenger/grazer population is representation-capped; ${life.aggregateOrganisms + agents.populationReserve} in aggregate reserve.`,
+      'info',
+    )
+  } else if (popArch.capacityPressurePct >= 80 && out.length < 8) {
+    push(
+      `Algae reached local carrying capacity (${popArch.capacityPressurePct}% fill); expansion pressure ${popArch.expansionPressurePct}%.`,
+      'info',
+    )
+  }
+
+  const ecotypeEvent = events.find((e) => e.type === 'evolution.niche_expansion' || e.type === 'evolution.subspecies_emerged')
+  if (ecotypeEvent && out.length < 8) {
+    push(ecotypeEvent.message, 'positive')
+  }
+
   return out.slice(0, 8)
 }

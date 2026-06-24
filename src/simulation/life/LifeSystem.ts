@@ -2,11 +2,11 @@ import type {
   LifeKind,
   LifeOrganism,
   LifeSnapshot,
+  PopulationArchitectureMetrics,
   TileLifeData,
 } from '../../types/life'
 import {
   MAX_ORGANISMS_PER_TILE,
-  MAX_TOTAL_ORGANISMS,
   BASE_METABOLISM,
   REPRODUCTION_ENERGY_THRESHOLD,
   REPRODUCTION_ENERGY_COST,
@@ -14,7 +14,18 @@ import {
 import type { World } from '../../types/simulation'
 import type { Rng } from '../../utils/rng'
 import { forkRng } from '../../utils/rng'
-import { habitatSuitability, neighborOffsets, tileCarryingCapacity } from '../ecology/colonization'
+import { AggregatePopulationStore } from '../ecology/aggregatePopulation'
+import {
+  getTileCarryingCapacity,
+  getWorldCarryingCapacityByTrophicRole,
+  getExpansionPressure,
+  type CarryingCapacityContext,
+} from '../ecology/carryingCapacity'
+import { habitatSuitability, neighborOffsets } from '../ecology/colonization'
+import {
+  buildPopulationConfig,
+  type PopulationArchitectureConfig,
+} from '../ecology/populationConfig'
 import {
   computeEnergyGain,
   computeMetabolismCost,
@@ -65,6 +76,10 @@ export class LifeSystem {
   private recentActivityTiles = new Set<number>()
   private lastTickBirths = 0
   private lastTickDeaths = 0
+  private readonly aggregate = new AggregatePopulationStore()
+  private popConfig: PopulationArchitectureConfig | null = null
+  private capacityPressureCooldown = 0
+  private lastBottleneckKind: import('../evolution/bottleneckRecovery').BottleneckKind = 'none'
   private recoveryMods: RecoveryModifiers = {
     reproductionBoost: 1,
     dispersalBoost: 1,
@@ -75,9 +90,79 @@ export class LifeSystem {
   constructor(seed: string, world: World) {
     this.seed = seed
     this.tickRng = forkRng(seed, 'life')
+    this.popConfig = buildPopulationConfig(world)
+    this.aggregate.init(world)
     this.initTileArrays(world)
     resetSpeciesCounter()
     this.registry.clear()
+  }
+
+  getAggregateStore(): AggregatePopulationStore {
+    return this.aggregate
+  }
+
+  getPopulationConfig(): PopulationArchitectureConfig {
+    if (this.popConfig) return this.popConfig
+    return {
+      maxTrackedIndividuals: 4000,
+      maxTrackedAgents: 600,
+      maxRenderedAgents: 800,
+      aggregatePopulationEnabled: true,
+      populationScaleByWorldArea: true,
+      safetyOrganismCeiling: 25000,
+      safetyAgentCeiling: 2000,
+      activeTileCount: 6000,
+    }
+  }
+
+  setBottleneckKind(kind: import('../evolution/bottleneckRecovery').BottleneckKind): void {
+    this.lastBottleneckKind = kind
+  }
+
+  getBiologicalPopulation(): number {
+    return this.organisms.length + this.aggregate.getTotalCount()
+  }
+
+  getPopulationArchitectureMetrics(world: World): PopulationArchitectureMetrics {
+    const config = this.getPopulationConfig()
+    const ctx = this.buildCapacityContext(world)
+    const habitatCap = getWorldCarryingCapacityByTrophicRole('producer', ctx)
+    const bioPop = this.getBiologicalPopulation()
+    const capacityPressure = habitatCap > 0 ? Math.min(1, bioPop / habitatCap) : 0
+    const dominant = this.registry.getDominant()
+    const expansionPressure = dominant
+      ? getExpansionPressure(
+          dominant.id,
+          ctx,
+          this.colonizedTiles.size,
+          dominant.population,
+        )
+      : 0
+    const trackedAtCap = this.organisms.length >= config.maxTrackedIndividuals * 0.95
+    const aggregateGrowing = this.aggregate.getTotalCount() > 0
+
+    return {
+      trackedIndividuals: this.organisms.length,
+      aggregatePopulation: this.aggregate.getTotalCount(),
+      totalBiologicalPopulation: bioPop,
+      worldCarryingCapacityEstimate: habitatCap,
+      capacityPressurePct: Math.round(capacityPressure * 1000) / 10,
+      expansionPressurePct: Math.round(expansionPressure * 1000) / 10,
+      artificialCapEngaged: trackedAtCap && capacityPressure < 0.85,
+      representationCapped: trackedAtCap && aggregateGrowing,
+      bottleneckKind: this.lastBottleneckKind === 'none' ? null : this.lastBottleneckKind,
+    }
+  }
+
+  buildCapacityContext(world: World, tileAgentCounts?: number[]): CarryingCapacityContext {
+    return {
+      world,
+      tileBiomass: this.tileBiomass,
+      tileCounts: this.tileCounts,
+      tileAgentCounts,
+      producerBiomass: this.cachedTotalBiomass + this.aggregate.getTotalBiomass(),
+      species: this.registry.getAll(),
+    }
   }
 
   seedInitialLife(world: World, emit: LifeEventEmitter): void {
@@ -187,14 +272,16 @@ export class LifeSystem {
   }
 
   /** Disaster: reduce biomass on a tile; returns organisms killed. */
-  applyBiomassStress(world: World, tileIndex: number, burnFactor: number): number {
+  applyBiomassStress(world: World, tileIndex: number, burnFactor: number, tick: number): number {
     const w = world.width
     const x = tileIndex % w
     const y = Math.floor(tileIndex / w)
     let killed = 0
+    let stressIdx = 0
     for (const organism of this.organisms) {
       if (organism.x !== x || organism.y !== y) continue
-      if (this.tickRng() < burnFactor) {
+      const rng = forkRng(this.seed, `stress-burn-${tick}-${tileIndex}-${stressIdx++}`)
+      if (rng() < burnFactor) {
         organism.health -= 0.4 + burnFactor * 0.5
         if (organism.health <= 0) killed += 1
       } else {
@@ -259,17 +346,20 @@ export class LifeSystem {
       if (
         organism.energy >= REPRODUCTION_ENERGY_THRESHOLD &&
         organism.reproductionCooldown <= 0 &&
-        this.organisms.length + births.length < MAX_TOTAL_ORGANISMS &&
         birthsThisTick < MAX_BIRTHS_PER_TICK
       ) {
         const child = this.tryReproduce(organism, world, tick, emit, suppressMinorEvents)
         if (child) {
-          births.push(child)
-          birthsThisTick += 1
+          if (child === 'aggregate') {
+            birthsThisTick += 1
+          } else {
+            births.push(child)
+            birthsThisTick += 1
+          }
           organism.energy -= REPRODUCTION_ENERGY_COST
           organism.reproductionCooldown = Math.round(18 / Math.max(0.12, organism.genome.reproductionRate))
-          if (!suppressMinorEvents) {
-            const tileIdx = child.y * world.width + child.x
+          if (!suppressMinorEvents && child !== 'aggregate') {
+            const tileIdx = (child as LifeOrganism).y * world.width + (child as LifeOrganism).x
             this.recentActivityTiles.add(tileIdx)
           }
         }
@@ -300,7 +390,40 @@ export class LifeSystem {
 
     this.organisms.push(...births)
     this.rebuildTileIndex(world)
-    this.lastTickBirths = births.length
+
+    const ctx = this.buildCapacityContext(world)
+    const aggGrowth = this.aggregate.tickProducerGrowth(
+      world,
+      ctx,
+      forkRng(this.seed, `agg-grow-${tick}`),
+      this.recoveryMods.dispersalBoost,
+    )
+    if (aggGrowth.growth > 0 || aggGrowth.dispersals > 0) {
+      this.rebuildTileIndex(world)
+    }
+
+    if (!suppressMinorEvents && this.capacityPressureCooldown <= 0) {
+      const metrics = this.getPopulationArchitectureMetrics(world)
+      if (metrics.artificialCapEngaged && metrics.representationCapped) {
+        this.capacityPressureCooldown = 400
+        emit(
+          'population.capacity_pressure',
+          `Producer population representation-capped; ${this.aggregate.getTotalCount()} in aggregate pools (${metrics.capacityPressurePct}% habitat fill).`,
+        )
+      } else if (aggGrowth.dispersals > 0) {
+        this.capacityPressureCooldown = 600
+        emit('population.expansion_wave', `Expansion wave — ${aggGrowth.dispersals} aggregate dispersal events this tick.`)
+      } else if (metrics.capacityPressurePct >= 85 && metrics.expansionPressurePct >= 50) {
+        this.capacityPressureCooldown = 500
+        emit(
+          'evolution.competition_pressure',
+          `Local carrying capacity pressure (${metrics.capacityPressurePct}%) — competition and specialization increasing.`,
+        )
+      }
+    }
+    if (this.capacityPressureCooldown > 0) this.capacityPressureCooldown -= 1
+
+    this.lastTickBirths = births.length + (aggGrowth.growth > 0 ? 1 : 0)
     this.lastTickDeaths = deaths.length
 
     if (births.length > 0 && !suppressMinorEvents) {
@@ -382,10 +505,26 @@ export class LifeSystem {
       organisms: includeOrganisms ? [...this.organisms] : [],
       species: this.registry.getAll(),
       totalOrganisms: this.organisms.length,
+      aggregateOrganisms: this.aggregate.getTotalCount(),
+      totalBiologicalPopulation: this.getBiologicalPopulation(),
       totalBiomass: this.cachedTotalBiomass,
+      aggregateBiomass: this.aggregate.getTotalBiomass(),
       tileCounts: [...this.tileCounts],
       tileBiomass: [...this.tileBiomass],
       speciesOccupancy: occupancy,
+      populationArchitecture: world
+        ? this.getPopulationArchitectureMetrics(world)
+        : {
+            trackedIndividuals: this.organisms.length,
+            aggregatePopulation: this.aggregate.getTotalCount(),
+            totalBiologicalPopulation: this.getBiologicalPopulation(),
+            worldCarryingCapacityEstimate: 0,
+            capacityPressurePct: 0,
+            expansionPressurePct: 0,
+            artificialCapEngaged: false,
+            representationCapped: false,
+            bottleneckKind: null,
+          },
     }
   }
 
@@ -424,10 +563,12 @@ export class LifeSystem {
   /** Consume producer biomass on a tile for herbivory — returns amount consumed. */
   consumeBiomassAt(x: number, y: number, amount: number, world: World): number {
     const onTile = this.organisms.filter((o) => o.x === x && o.y === y)
-    if (onTile.length === 0) return 0
+    const idx = y * world.width + x
+    let consumed = this.aggregate.consumeBiomassAt(idx, amount)
+    let remaining = amount - consumed
 
-    let remaining = amount
-    let consumed = 0
+    if (onTile.length === 0 && consumed > 0) return consumed
+
     const sorted = [...onTile].sort((a, b) => a.biomass - b.biomass)
 
     for (const organism of sorted) {
@@ -465,6 +606,12 @@ export class LifeSystem {
       stats.biomass += organism.biomass
       popMap.set(organism.speciesId, stats)
     }
+    for (const [speciesId, stats] of this.aggregate.getPopulationMap()) {
+      const existing = popMap.get(speciesId) ?? { count: 0, biomass: 0 }
+      existing.count += stats.count
+      existing.biomass += stats.biomass
+      popMap.set(speciesId, existing)
+    }
     return popMap
   }
 
@@ -480,6 +627,9 @@ export class LifeSystem {
 
   reset(world: World, emit: LifeEventEmitter): void {
     this.organisms = []
+    this.aggregate.clear()
+    this.popConfig = buildPopulationConfig(world)
+    this.aggregate.init(world)
     this.registry.clear()
     resetSpeciesCounter()
     this.tickRng = forkRng(this.seed, 'life')
@@ -495,6 +645,14 @@ export class LifeSystem {
     this.speciesOccupancyCache = {}
     this.cachedTotalBiomass = 0
     this.liveTileCounts = []
+    this.capacityPressureCooldown = 0
+    this.lastBottleneckKind = 'none'
+    this.recoveryMods = {
+      reproductionBoost: 1,
+      dispersalBoost: 1,
+      mutationVarianceBoost: 1,
+      overcrowdingRelief: 1,
+    }
     this.initTileArrays(world)
     this.seedInitialLife(world, emit)
   }
@@ -532,7 +690,18 @@ export class LifeSystem {
   private spawnFounder(kind: LifeKind, x: number, y: number, world: World, tick: number): void {
     if (!isTileActive(world, x, y)) return
     if (this.countAtTile(x, y, world) >= MAX_ORGANISMS_PER_TILE) return
-    if (this.organisms.length >= MAX_TOTAL_ORGANISMS) return
+
+    const config = this.getPopulationConfig()
+    const bioPop = this.getBiologicalPopulation()
+    if (bioPop >= config.safetyOrganismCeiling) return
+
+    if (this.organisms.length >= config.maxTrackedIndividuals) {
+      if (!config.aggregatePopulationEnabled) return
+      const founder = createFounderOrganism(kind, '', x, y)
+      const species = this.registry.getOrCreateFounderSpecies(kind, founder.genome, tick)
+      this.aggregate.addPopulation(species.id, kind, y * world.width + x, 1)
+      return
+    }
 
     const founder = createFounderOrganism(kind, '', x, y)
     const species = this.registry.getOrCreateFounderSpecies(kind, founder.genome, tick)
@@ -550,52 +719,63 @@ export class LifeSystem {
     tick: number,
     emit: LifeEventEmitter,
     suppressMinorEvents: boolean,
-  ): LifeOrganism | null {
+  ): LifeOrganism | 'aggregate' | null {
     if (this.tickRng() > parent.genome.reproductionRate * parent.genome.spreadRate * this.recoveryMods.reproductionBoost + 0.15) {
       return null
     }
+
+    const config = this.getPopulationConfig()
+    const ctx = this.buildCapacityContext(world)
 
     const candidates = neighborOffsets()
       .map(([dx, dy]) => ({ x: parent.x + dx, y: parent.y + dy }))
       .filter(({ x, y }) => {
         const tile = getTileAt(world, x, y)
         if (!tile) return false
-        if (this.countAtTile(x, y, world) >= MAX_ORGANISMS_PER_TILE) return false
-        const cap = tileCarryingCapacity(parent.kind, tile)
-        if (cap <= 0) return false
+        const idx = y * world.width + x
+        const occ = this.countAtTile(x, y, world) + this.aggregate.getTileCount(idx)
+        const cap = getTileCarryingCapacity(tile, parent.kind, ctx, parent.genome)
+        if (cap <= 0 || occ >= cap * this.recoveryMods.overcrowdingRelief) return false
         return habitatSuitability(parent.kind, tile, parent.genome) > 0.2
       })
 
     if (candidates.length === 0) {
       const home = getTileAt(world, parent.x, parent.y)
-      if (!home || this.countAtTile(parent.x, parent.y, world) >= MAX_ORGANISMS_PER_TILE) {
+      const homeIdx = parent.y * world.width + parent.x
+      const homeOcc = this.countAtTile(parent.x, parent.y, world) + this.aggregate.getTileCount(homeIdx)
+      const homeCap = home ? getTileCarryingCapacity(home, parent.kind, ctx, parent.genome) : 0
+      if (!home || homeOcc >= Math.min(MAX_ORGANISMS_PER_TILE, homeCap)) {
         return null
       }
       candidates.push({ x: parent.x, y: parent.y })
     }
 
     const pick = candidates[Math.floor(this.tickRng() * candidates.length)]
-    const childGenome = mutateGenome(parent.genome, forkRng(this.seed, `mut-${parent.id}-${tick}`))
+    const pickIdx = pick.y * world.width + pick.x
+    const childGenome = mutateGenome(
+      parent.genome,
+      forkRng(this.seed, `mut-${parent.speciesId}-${parent.x}-${parent.y}-${parent.generation}-${tick}`),
+    )
     let speciesId = parent.speciesId
     const childGeneration = parent.generation + 1
     const parentPop = this.registry.getPopulation(parent.speciesId)
     const homeTile = getTileAt(world, pick.x, pick.y) ?? getTileAt(world, parent.x, parent.y)
 
     if (homeTile) {
-      const config = DEFAULT_SPECIATION_CONFIG
+      const specConfig = DEFAULT_SPECIATION_CONFIG
       const branch = evaluateBranchCandidate(
         parent.genome,
         childGenome,
         homeTile,
         childGeneration,
         parentPop,
-        config,
+        specConfig,
         tick - (this.registry.get(parent.speciesId)?.createdAtTick ?? tick),
         1,
       )
 
       if (branch.shouldBranch) {
-        const existing = this.registry.findByGenome(parent.kind, childGenome, config.geneticDistanceVariantThreshold)
+        const existing = this.registry.findByGenome(parent.kind, childGenome, specConfig.geneticDistanceVariantThreshold)
         if (existing && existing.establishmentStatus !== 'failed') {
           speciesId = existing.id
         } else {
@@ -618,12 +798,35 @@ export class LifeSystem {
               branch.rank === 'species' ? 'evolution.species_stabilized' : 'evolution.subspecies_emerged',
               adaptiveRadiationMessage(branch.rank, parent.kind, branch.reason, tick),
             )
+          } else if (!suppressMinorEvents && branch.rank === 'variant' && this.tickRng() > 0.88) {
+            emit('evolution.local_specialization', adaptiveRadiationMessage('variant', parent.kind, branch.reason, tick))
           }
         }
       }
     }
 
-    const wasEmpty = this.countAtTile(pick.x, pick.y, world) === 0
+    const bioPop = this.getBiologicalPopulation()
+    if (bioPop >= config.safetyOrganismCeiling) return null
+
+    const trackedAtCap = this.organisms.length >= config.maxTrackedIndividuals
+    const tileIndividuals = this.countAtTile(pick.x, pick.y, world)
+
+    if (trackedAtCap || tileIndividuals >= MAX_ORGANISMS_PER_TILE) {
+      if (!config.aggregatePopulationEnabled) return null
+      this.aggregate.addPopulation(speciesId, parent.kind, pickIdx, 1)
+      if ((this.aggregate.getTileCount(pickIdx) === 1) && !suppressMinorEvents) {
+        const tile = getTileAt(world, pick.x, pick.y)
+        if (tile) {
+          emit(
+            'population.range_expansion',
+            `${parent.kind} aggregate pool expanded into ${tile.terrain.replace(/_/g, ' ')} at (${pick.x}, ${pick.y}).`,
+          )
+        }
+      }
+      return 'aggregate'
+    }
+
+    const wasEmpty = tileIndividuals === 0 && this.aggregate.getTileCount(pickIdx) === 0
     const child = createOrganism(parent.kind, speciesId, pick.x, pick.y, childGenome, childGeneration)
 
     if (wasEmpty && !suppressMinorEvents) {
@@ -654,6 +857,21 @@ export class LifeSystem {
       stats.count += 1
       stats.biomass += organism.biomass
       popMap.set(organism.speciesId, stats)
+    }
+
+    const aggMap = this.aggregate.getPopulationMap()
+    const aggSnap = this.aggregate.getSnapshot()
+    for (let i = 0; i < aggSnap.tileAggregateCounts.length; i++) {
+      this.tileCounts[i] += aggSnap.tileAggregateCounts[i] ?? 0
+      this.tileBiomass[i] += aggSnap.tileAggregateBiomass[i] ?? 0
+      totalBiomass += aggSnap.tileAggregateBiomass[i] ?? 0
+    }
+
+    for (const [speciesId, aggStats] of aggMap) {
+      const stats = popMap.get(speciesId) ?? { count: 0, biomass: 0 }
+      stats.count += aggStats.count
+      stats.biomass += aggStats.biomass
+      popMap.set(speciesId, stats)
     }
 
     this.cachedTotalBiomass = totalBiomass

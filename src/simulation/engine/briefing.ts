@@ -104,18 +104,50 @@ export function buildBriefing(
       ? `${mobileWithController} mobile agents with adaptive controllers · species memory active`
       : null
 
+  const popArch = life.populationArchitecture
+  let plateauExplanation: string | null = null
+  if (popArch.artificialCapEngaged && popArch.representationCapped) {
+    plateauExplanation = `Aggregate population continues (${popArch.aggregatePopulation} in reserve); tracked individuals capped for performance.`
+  } else if (popArch.capacityPressurePct >= 85) {
+    plateauExplanation = 'Population plateau is ecological, not artificial — local carrying capacity reached.'
+  }
+
   const bottleneckEvent = events.find((e) => e.type === 'evolution.bottleneck_detected')
   const recoveryEvent = events.find((e) => e.type === 'evolution.recovery_started')
   let bottleneckStatus: string | null = null
-  if (recoveryEvent) bottleneckStatus = 'Recovery active — expansion pressure from refugia'
-  else if (bottleneckEvent) bottleneckStatus = 'Bottleneck detected — monitoring population spread'
+  if (recoveryEvent) {
+    bottleneckStatus =
+      popArch.bottleneckKind === 'artificial_cap_bottleneck'
+        ? 'Representation cap active — aggregate pools absorbing growth'
+        : popArch.bottleneckKind === 'expansion_failure'
+          ? 'Expansion failure — boosting dispersal pressure'
+          : popArch.bottleneckKind === 'carrying_capacity_plateau'
+            ? 'Ecological carrying capacity plateau — speciation/competition active'
+            : 'Recovery active — expansion pressure from refugia'
+  } else if (bottleneckEvent) {
+    bottleneckStatus = plateauExplanation ?? 'Bottleneck detected — monitoring population spread'
+  }
+
+  const populationArchitecture: import('../../types/runtime').PopulationArchitectureBriefing = {
+    trackedOrganisms: life.totalOrganisms,
+    aggregateOrganisms: life.aggregateOrganisms,
+    trackedAgents: agents.totalAgents,
+    agentReserve: agents.populationReserve,
+    worldCarryingCapacity: popArch.worldCarryingCapacityEstimate,
+    capacityPressurePct: popArch.capacityPressurePct,
+    expansionPressurePct: popArch.expansionPressurePct,
+    artificialCapEngaged: popArch.artificialCapEngaged,
+    representationCapped: popArch.representationCapped,
+    bottleneckKind: popArch.bottleneckKind,
+    plateauExplanation,
+  }
 
   return {
     simulatedYear: tickToYears(tick),
     estimatedGenerations: tickToGenerations(tick),
     era: eraForTick(tick, hasPlants, hasAlgae, agents.totalAgents > 0, agents.predatorCount),
-    totalOrganisms: life.totalOrganisms + agents.totalAgents,
-    totalBiomass: life.totalBiomass + agents.totalBiomass,
+    totalOrganisms: life.totalBiologicalPopulation + agents.totalMobilePopulation,
+    totalBiomass: life.totalBiomass + life.aggregateBiomass + agents.totalBiomass,
     speciesCount: aliveSpecies.length,
     dominantKind,
     dominantSpeciesName: dominant?.name ?? null,
@@ -154,6 +186,7 @@ export function buildBriefing(
     bottleneckStatus,
     protoCognitionSummary,
     disasterPacingSummary,
+    populationArchitecture,
   }
 }
 

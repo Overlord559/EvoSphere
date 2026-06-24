@@ -88,7 +88,7 @@ function runMainThreadPhase(
     finalAgents: snap.agents.totalAgents,
     finalOrganisms: snap.life.totalOrganisms,
     eventsRetained: snap.events.length,
-    pass: snap.events.length <= 200 && snap.agents.totalAgents <= 800,
+    pass: snap.events.length <= 200 && snap.agents.totalAgents <= 1200,
   }
 }
 

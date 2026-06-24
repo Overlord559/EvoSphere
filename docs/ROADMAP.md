@@ -147,7 +147,7 @@
 - [x] Behavior integration — utility goals use senses + fitness + predator pressure
 - [x] Stability QA gate script — Standard 192×192 all speed modes + deep time smoke test
 
-## v0.5.4 — Proto-Cognition + Ecological Succession + Adaptive Radiation ✅ (current)
+## v0.5.4 — Proto-Cognition + Ecological Succession + Adaptive Radiation ✅
 
 - [x] Abiotic substrate vs biotic ecosystem tile fields
 - [x] Worldgen — no forest/grassland/swamp/marsh at birth
@@ -158,6 +158,27 @@
 - [x] Proto-cognition — `cognition/NeuralController.ts`, learning, species memory
 - [x] UI — Briefing succession/recovery, Species variants, Inspector cognition, disaster controls
 - [x] QA — `qa:succession`, `qa:evolution`
+
+## v0.5.4c — Population Cap Architecture + Adaptive Carrying Capacity ✅ (current)
+
+- [x] Aggregate population pools for producers and mobile reserve when tracked budget full
+- [x] Dynamic carrying capacity — habitat, succession, biomass, trophic role, crowding
+- [x] World-size-scaled population config — tracked vs rendered vs safety ceilings
+- [x] Bottleneck taxonomy — artificial cap vs ecological vs plateau vs expansion failure
+- [x] Cap-pressure dispersal/evolution events
+- [x] Briefing + Soak HUD population architecture telemetry
+- [x] QA — `qa:population` · updated stability/performance/determinism gates
+- [ ] v0.6 Communication + Social Learning — **blocked** until browser soak passes
+
+## v0.5.4b — Browser Soak + Determinism + Worker Disaster Sync ✅
+
+- [x] Deterministic monotonic IDs — `src/utils/deterministicId.ts`; no `nanoid` in sim tick paths
+- [x] Reset replay exact match — sorted registry iteration; mutation RNG keyed by species+position+generation
+- [x] Worker `setDisasterSettings` protocol — main and worker disaster pacing stay aligned
+- [x] Soak HUD — tick, FPS, heap, orgs/agents/species/variants, succession %, disasters, worker/main, dis-sync
+- [x] Disaster development messages — cooldown active, safe mode refugia
+- [x] Variant hardening — tighter speciation thresholds; failed variants stay quiet
+- [x] QA — `qa:determinism` (5000-tick fingerprint gate)
 
 ## v0.6 Communication + Memory + Social Behavior (next)
 

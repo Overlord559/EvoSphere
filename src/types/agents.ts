@@ -81,8 +81,14 @@ export interface FoodWebLink {
 
 export interface AgentSnapshot {
   agents: MobileAgent[]
+  /** Individually tracked mobile agents. */
   totalAgents: number
+  /** Aggregate mobile population in reserve pools. */
+  populationReserve: number
+  /** Tracked + reserve combined mobile population. */
+  totalMobilePopulation: number
   totalBiomass: number
+  reserveBiomass: number
   /** Per-tile mobile agent count (length = world.width * world.height). */
   tileAgentCounts: number[]
   grazerCount: number
@@ -96,6 +102,7 @@ export interface AgentSnapshot {
 }
 
 export const MAX_AGENTS_PER_TILE = 3
+/** @deprecated Use populationConfig maxTrackedAgents — kept for QA reference only. */
 export const MAX_TOTAL_AGENTS = 800
 export const AGENT_BASE_METABOLISM = 0.022
 export const AGENT_REPRODUCTION_ENERGY = 0.68

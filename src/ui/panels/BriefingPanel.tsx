@@ -143,6 +143,29 @@ export function BriefingPanel() {
         </div>
       )}
 
+      {!selected && briefing.populationArchitecture && (
+        <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-2 font-mono text-xs text-emerald-100/90">
+          <p className="mb-1 text-emerald-300/80">POPULATION ARCHITECTURE</p>
+          <dl className="space-y-0.5">
+            <Row
+              label="Tracked / aggregate orgs"
+              value={`${briefing.populationArchitecture.trackedOrganisms} / ${briefing.populationArchitecture.aggregateOrganisms}`}
+            />
+            <Row
+              label="Tracked / reserve agents"
+              value={`${briefing.populationArchitecture.trackedAgents} / ${briefing.populationArchitecture.agentReserve}`}
+            />
+            <Row
+              label="Capacity pressure"
+              value={`${briefing.populationArchitecture.capacityPressurePct}%`}
+            />
+            {briefing.populationArchitecture.plateauExplanation && (
+              <p className="pt-1 text-[10px] text-slate-400">{briefing.populationArchitecture.plateauExplanation}</p>
+            )}
+          </dl>
+        </div>
+      )}
+
       {!selected && briefing.bottleneckStatus && (
         <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2 font-mono text-xs text-amber-200">
           <p className="mb-1 text-amber-300">RECOVERY STATUS</p>

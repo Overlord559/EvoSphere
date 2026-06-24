@@ -1,7 +1,5 @@
 import type { CrashRiskLevel, SoakWarning } from '../../types/runtime'
 
-import { MAX_TOTAL_ORGANISMS } from '../../types/life'
-
 import {
   MAX_EVENTS_RETAINED,
   MAX_GLYPH_CACHE_ENTRIES,
@@ -10,10 +8,12 @@ import {
   RUNAWAY_AGENT_POPULATION,
   RUNAWAY_ORGANISM_POPULATION,
 } from './stabilityGuards'
+import { LEGACY_MAX_TOTAL_ORGANISMS } from '../ecology/populationConfig'
 
 export interface SimHealthInput {
   organismCount: number
   agentCount: number
+  biologicalPopulation?: number
   eventCount: number
   developmentCount: number
   maxTileOrganisms: number
@@ -67,7 +67,9 @@ export function computeCrashRisk(input: SimHealthInput): CrashRiskLevel {
     return 'medium'
   }
   if (input.maxTileOrganisms > 4 || input.maxTileAgents > 3) return 'medium'
-  if (input.organismCount > MAX_TOTAL_ORGANISMS * 0.75) return 'medium'
+  if (input.organismCount > LEGACY_MAX_TOTAL_ORGANISMS * 0.75 && (input.biologicalPopulation ?? input.organismCount) < LEGACY_MAX_TOTAL_ORGANISMS * 1.2) {
+    return 'medium'
+  }
   if (input.snapshotBytesEstimate > 2_000_000) return 'medium'
   if (input.tickMsTrend !== undefined && input.tickMsTrend > 40) return 'medium'
   if (
@@ -89,4 +91,4 @@ export function readHeapEstimateMb(): number | null {
   return Math.round((perf.memory.usedJSHeapSize / (1024 * 1024)) * 10) / 10
 }
 
-export { RUNAWAY_ORGANISM_POPULATION, RUNAWAY_AGENT_POPULATION, MAX_TOTAL_ORGANISMS }
+export { RUNAWAY_ORGANISM_POPULATION, RUNAWAY_AGENT_POPULATION, LEGACY_MAX_TOTAL_ORGANISMS }

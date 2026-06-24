@@ -9,7 +9,9 @@ import { sanitizeController } from '../src/simulation/cognition/NeuralController
 const PRESET = DEFAULT_WORLD_SIZE_PRESET
 const { width, height } = dimensionsForPreset(PRESET)
 
-console.log(`EvoSphere evolution QA — ${width}×${height}\n`)
+const STEP_COUNT = 5000
+
+console.log(`EvoSphere evolution QA — ${width}×${height}, ${STEP_COUNT} ticks\n`)
 
 let pass = true
 const engine = new SimEngine({
@@ -20,8 +22,9 @@ const engine = new SimEngine({
   worldSizePreset: PRESET,
 })
 
-engine.step(3000, true)
+engine.step(STEP_COUNT, true)
 const snap = engine.getSnapshot(false)
+const pop1 = snap.life.totalBiologicalPopulation
 const species = snap.life.species
 const failedVariants = species.filter((s) => s.taxonRank === 'variant' && s.establishmentStatus === 'failed')
 const instantDeaths = species.filter(
@@ -55,19 +58,33 @@ console.log(
   `[INFO] species=${species.length} variants=${species.filter((s) => s.taxonRank === 'variant').length} subspecies=${species.filter((s) => s.taxonRank === 'subspecies').length} failed_variants=${failedVariants.length}`,
 )
 
-engine.step(3000, true)
-const pop1 = engine.getSnapshot(false).life.totalOrganisms
-
 engine.reset({ seed: 'evosphere-prime' })
-engine.step(3000, true)
-const pop2 = engine.getSnapshot(false).life.totalOrganisms
+engine.step(STEP_COUNT, true)
+const pop2 = engine.getSnapshot(false).life.totalBiologicalPopulation
 
-const tolerance = Math.max(8, Math.floor(pop1 * 0.002))
+const fresh = new SimEngine({
+  seed: 'evosphere-prime',
+  worldWidth: width,
+  worldHeight: height,
+  tickRate: 10,
+  worldSizePreset: PRESET,
+})
+fresh.step(STEP_COUNT, true)
+const popFresh = fresh.getSnapshot(false).life.totalBiologicalPopulation
+
+const tolerance = 0
 if (Math.abs(pop1 - pop2) > tolerance) {
   pass = false
-  console.log(`[FAIL] Determinism — reset+replay population ${pop1} vs ${pop2} (tolerance ${tolerance})`)
+  console.log(`[FAIL] Reset replay — bio population ${pop1} vs ${pop2}`)
 } else {
-  console.log(`[OK] Deterministic within tolerance — ${pop1} vs ${pop2} (Δ${Math.abs(pop1 - pop2)})`)
+  console.log(`[OK] Reset replay — ${pop1} biological population (exact match)`)
+}
+
+if (Math.abs(pop1 - popFresh) > tolerance) {
+  pass = false
+  console.log(`[FAIL] Fresh engine — bio population ${pop1} vs ${popFresh}`)
+} else {
+  console.log(`[OK] Fresh engine exact match — ${popFresh} biological population`)
 }
 
 console.log(`\nEVOLUTION QA: ${pass ? 'PASS' : 'FAIL'}`)

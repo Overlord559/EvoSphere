@@ -101,17 +101,38 @@ export interface SpeciesOccupancy {
 export interface LifeSnapshot {
   organisms: LifeOrganism[]
   species: SpeciesRecord[]
+  /** Individually tracked organism count (render/inspection budget). */
   totalOrganisms: number
+  /** Aggregate pool population not represented as individual entities. */
+  aggregateOrganisms: number
+  /** Tracked + aggregate combined biological population. */
+  totalBiologicalPopulation: number
   totalBiomass: number
+  aggregateBiomass: number
   /** Per-tile organism count (length = world.width * world.height). */
   tileCounts: number[]
-  /** Per-tile biomass sum. */
+  /** Per-tile biomass sum (tracked + aggregate). */
   tileBiomass: number[]
   /** Precomputed occupancy per alive species id. */
   speciesOccupancy: Record<string, SpeciesOccupancy>
+  /** Population architecture telemetry. */
+  populationArchitecture: PopulationArchitectureMetrics
+}
+
+export interface PopulationArchitectureMetrics {
+  trackedIndividuals: number
+  aggregatePopulation: number
+  totalBiologicalPopulation: number
+  worldCarryingCapacityEstimate: number
+  capacityPressurePct: number
+  expansionPressurePct: number
+  artificialCapEngaged: boolean
+  representationCapped: boolean
+  bottleneckKind: import('../simulation/evolution/bottleneckRecovery').BottleneckKind | null
 }
 
 export const MAX_ORGANISMS_PER_TILE = 4
+/** @deprecated Use populationConfig maxTrackedIndividuals — kept for QA reference only. */
 export const MAX_TOTAL_ORGANISMS = 5000
 export const BASE_METABOLISM = 0.018
 export const REPRODUCTION_ENERGY_THRESHOLD = 0.62

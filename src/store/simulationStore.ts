@@ -16,9 +16,9 @@ import { WORKER_SIMULATION_ENABLED } from '../simulation/config/simConfig'
 import {
   computeCrashRisk,
   estimateSnapshotBytes,
-  MAX_TOTAL_ORGANISMS,
   readHeapEstimateMb,
 } from '../simulation/engine/simHealth'
+import { LEGACY_MAX_TOTAL_ORGANISMS } from '../simulation/ecology/populationConfig'
 import {
   tryCreateWorkerClient,
   WorkerSimulationClient,
@@ -132,13 +132,17 @@ function buildHealthStats(
   const bytes = estimateSnapshotBytes(snapshot)
   const maxTileOrg = Math.max(0, ...snapshot.life.tileCounts)
   const maxTileAgent = Math.max(0, ...snapshot.agents.tileAgentCounts)
+  const popArch = snapshot.life.populationArchitecture
   const organismCapUsagePct = Math.round(
-    (snapshot.life.totalOrganisms / MAX_TOTAL_ORGANISMS) * 1000,
+    (popArch.capacityPressurePct > 0
+      ? popArch.capacityPressurePct
+      : (snapshot.life.totalOrganisms / LEGACY_MAX_TOTAL_ORGANISMS) * 100),
   ) / 10
+  const biologicalPop = snapshot.life.totalBiologicalPopulation + snapshot.agents.totalMobilePopulation
   const speciesCount = snapshot.life.species.filter((s) => s.population > 0).length
   const devCount = snapshot.briefing.latestDevelopments.length
 
-  globalSoakTelemetry.recordBirthDeath(snapshot.life.totalOrganisms)
+  globalSoakTelemetry.recordBirthDeath(biologicalPop)
 
   const report = globalProfiler.buildReport()
   const soak = globalSoakTelemetry.snapshot({
@@ -194,6 +198,7 @@ function buildHealthStats(
     crashRiskLevel: computeCrashRisk({
       organismCount: snapshot.life.totalOrganisms,
       agentCount: snapshot.agents.totalAgents,
+      biologicalPopulation: biologicalPop,
       eventCount: snapshot.events.length,
       developmentCount: devCount,
       maxTileOrganisms: maxTileOrg,
@@ -302,6 +307,8 @@ interface SimulationStore {
   /** True when Web Worker owns simulation stepping. */
   workerMode: boolean
   workerFallbackReason: string | null
+  /** Internal tick when disaster settings were last synced to worker (soak/debug). */
+  workerDisasterSyncTick: number | null
   performanceReport: PerformanceReport | null
   runtime: RuntimeState
   recentActivityTiles: number[]
@@ -496,6 +503,9 @@ async function bootstrapWorker(settings: SimulationSettings, selectedSpeciesId: 
   workerBootstrapping = false
   if (client) {
     workerClient = client
+    const disasterSettings = useSimulationStore.getState().engine.getDisasterSystem().getSettings()
+    client.setDisasterSettings(disasterSettings)
+    useSimulationStore.setState({ workerDisasterSyncTick: useSimulationStore.getState().engine.getInternalTick() })
   } else {
     useSimulationStore.setState({
       workerMode: false,
@@ -516,7 +526,7 @@ async function reinitWorker(settings: SimulationSettings, selectedSpeciesId: str
 
 export const useSimulationStore = create<SimulationStore>((set, get) => ({
   activePanel: 'briefing',
-  phase: 'v0.5.2b long-run soak + focus escape UX',
+  phase: 'v0.5.4b browser soak + determinism + worker disaster sync',
   overlayMode: 'terrain',
   visualMode: 'organic',
   selectedTile: null,
@@ -526,6 +536,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
   snapshot: initialSnapshot,
   workerMode: false,
   workerFallbackReason: null,
+  workerDisasterSyncTick: null,
   performanceReport: null,
   cachedTerrainWorldId: initialSnapshot.worldId,
   runtime: {
@@ -954,8 +965,12 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
   },
 
   setDisasterSettings: (partial) => {
-    const { engine } = get()
+    const { engine, workerMode } = get()
     engine.getDisasterSystem().setSettings(partial)
+    if (workerMode && workerClient) {
+      workerClient.setDisasterSettings(partial)
+      set({ workerDisasterSyncTick: engine.getInternalTick() })
+    }
     get().syncFromEngine()
   },
 

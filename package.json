@@ -14,7 +14,9 @@
     "qa:longrun": "tsx scripts/qa-longrun.ts",
     "qa:worldgen": "tsx scripts/qa-worldgen.ts",
     "qa:succession": "tsx scripts/qa-succession.ts",
-    "qa:evolution": "tsx scripts/qa-evolution.ts"
+    "qa:evolution": "tsx scripts/qa-evolution.ts",
+    "qa:determinism": "tsx scripts/qa-determinism.ts",
+    "qa:population": "tsx scripts/qa-population.ts"
   },
   "dependencies": {
     "idb": "^8.0.3",

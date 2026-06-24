@@ -1,4 +1,4 @@
-import { nanoid } from 'nanoid'
+import { nextEventId, resetDeterministicIds } from '../../utils/deterministicId'
 import type {
   EventLogEntry,
   SimulationSettings,
@@ -17,6 +17,7 @@ import {
   type BottleneckMetrics,
   type BottleneckState,
 } from '../evolution/bottleneckRecovery'
+import { getWorldCarryingCapacityByTrophicRole } from '../ecology/carryingCapacity'
 import type { DisasterType } from '../disasters/DisasterTypes'
 import { LifeSystem } from '../life/LifeSystem'
 import { generateWorld } from '../world/generateWorld'
@@ -82,14 +83,22 @@ export class SimEngine {
   private bottleneckState: BottleneckState = createBottleneckState()
   private prevBottleneckMetrics: BottleneckMetrics = {
     totalPopulation: 0,
+    biologicalPopulation: 0,
+    trackedPopulation: 0,
+    aggregatePopulation: 0,
     speciesCount: 0,
     colonizedTiles: 0,
     producerBiomass: 0,
     dominantShare: 0,
+    habitatCapacityEstimate: 0,
+    suitableHabitatRemaining: 0,
+    artificialCapEngaged: false,
+    capacityPressurePct: 0,
   }
   private herbivoryPressure: number[] = []
 
   constructor(settings: SimulationSettings) {
+    resetDeterministicIds()
     this.settings = { ...settings }
     this.world = generateWorld(this.settings)
     this.life = new LifeSystem(this.settings.seed, this.world)
@@ -345,6 +354,7 @@ export class SimEngine {
   }
 
   reset(overrides?: Partial<SimulationSettings>): void {
+    resetDeterministicIds()
     this.tick = 0
     this.events.length = 0
     this.lastDeepTimeSummary = null
@@ -357,6 +367,21 @@ export class SimEngine {
     this.agents.reset(this.world, (type, message) => this.emitEvent(type, message))
     this.disasters.reset()
     this.bottleneckState = createBottleneckState()
+    this.prevBottleneckMetrics = {
+      totalPopulation: 0,
+      biologicalPopulation: 0,
+      trackedPopulation: 0,
+      aggregatePopulation: 0,
+      speciesCount: 0,
+      colonizedTiles: 0,
+      producerBiomass: 0,
+      dominantShare: 0,
+      habitatCapacityEstimate: 0,
+      suitableHabitatRemaining: 0,
+      artificialCapEngaged: false,
+      capacityPressurePct: 0,
+    }
+    this.herbivoryPressure = new Array(this.world.width * this.world.height).fill(0)
     this.successionLastEventTick = 0
     this.emitEvent(
       'world.reset',
@@ -394,18 +419,35 @@ export class SimEngine {
   private runBottleneckDetection(suppressMinorEvents: boolean): void {
     const lifeSnap = this.life.getSnapshot(false, this.world)
     const agentSnap = this.agents.getSnapshot(false)
+    const popArch = lifeSnap.populationArchitecture
     const alive = lifeSnap.species.filter((s) => s.population > 0 && s.establishmentStatus !== 'failed')
     const dominant = alive[0]
-    const totalPop = lifeSnap.totalOrganisms + agentSnap.totalAgents
+    const trackedPop = lifeSnap.totalOrganisms + agentSnap.totalAgents
+    const bioPop = lifeSnap.totalBiologicalPopulation + agentSnap.totalMobilePopulation
     const dominantShare =
-      dominant && totalPop > 0 ? (dominant.population + (agentSnap.totalAgents > 0 ? 1 : 0)) / totalPop : 0
+      dominant && bioPop > 0 ? dominant.population / bioPop : 0
+
+    const ctx = this.life.buildCapacityContext(this.world, agentSnap.tileAgentCounts)
+    const habitatCap =
+      popArch.worldCarryingCapacityEstimate +
+      getWorldCarryingCapacityByTrophicRole('grazer', ctx) +
+      getWorldCarryingCapacityByTrophicRole('scavenger', ctx)
+
+    const suitableRemaining = habitatCap > 0 ? Math.max(0, 1 - bioPop / habitatCap) : 0
 
     const current: BottleneckMetrics = {
-      totalPopulation: totalPop,
+      totalPopulation: bioPop,
+      biologicalPopulation: bioPop,
+      trackedPopulation: trackedPop,
+      aggregatePopulation: lifeSnap.aggregateOrganisms + agentSnap.populationReserve,
       speciesCount: alive.length,
       colonizedTiles: this.life.getColonizedTileCount(),
-      producerBiomass: lifeSnap.totalBiomass,
+      producerBiomass: lifeSnap.totalBiomass + lifeSnap.aggregateBiomass,
       dominantShare,
+      habitatCapacityEstimate: habitatCap,
+      suitableHabitatRemaining: suitableRemaining,
+      artificialCapEngaged: popArch.artificialCapEngaged || agentSnap.totalAgents >= this.life.getPopulationConfig().maxTrackedAgents * 0.95,
+      capacityPressurePct: popArch.capacityPressurePct / 100,
     }
 
     this.bottleneckState = updateBottleneckDetection(
@@ -416,6 +458,8 @@ export class SimEngine {
       (type, message) => this.emitEvent(type, message),
       suppressMinorEvents,
     )
+
+    this.life.setBottleneckKind(this.bottleneckState.kind)
 
     const mods = recoveryModifiers(this.bottleneckState)
     this.life.setRecoveryModifiers(mods)
@@ -580,11 +624,11 @@ export class SimEngine {
     }
 
     this.events.unshift({
-      id: nanoid(),
+      id: nextEventId(this.tick),
       tick: this.tick,
       type,
       message,
-      timestamp: Date.now(),
+      timestamp: this.tick,
     })
     if (this.events.length > MAX_EVENTS_RETAINED) {
       this.events.length = MAX_EVENTS_RETAINED
