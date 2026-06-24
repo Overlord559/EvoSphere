@@ -45,7 +45,19 @@
 - [x] Deep-time progress UI + runtime in summary
 - [x] ~5× faster +10K yr vs v0.3.1 sync benchmark (exact ticks preserved)
 
-## v0.4 Mobile Agents + Predation + Food Webs ✅ (current)
+## v0.4.1 Spore-Inspired Visual Biology + Biome Renderer ✅ (current)
+
+- [x] Organic biome renderer — textured terrain per biome type
+- [x] Procedural plant/producer glyphs keyed to density and biomass
+- [x] Spore-inspired mobile creature glyphs (grazer / predator / scavenger)
+- [x] Visual gene mapping from real genome traits
+- [x] Zoom-tier rendering detail (far / medium / close)
+- [x] Selected species agent glow + tile highlight + producer highlight
+- [x] Inspector visual preview with species stats and traits
+- [x] Organic (default) / Debug visual mode toggle
+- [x] Performance caps — agent draw limits scale with zoom tier
+
+## v0.4 Mobile Agents + Predation + Food Webs ✅
 
 - [x] Mobile agent kinds: SimpleGrazer, SimplePredator, Scavenger
 - [x] Mobile genome traits (speed, stamina, hunting, grazing, aggression, fearfulness, …)

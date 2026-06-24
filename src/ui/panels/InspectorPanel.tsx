@@ -3,6 +3,11 @@ import { topSpeciesOnTile } from '../../simulation/life/LifeSystem'
 import { agentsOnTile, topAgentSpeciesOnTile } from '../../simulation/agents/AgentSystem'
 import { formatPercent, formatTemperature } from '../../simulation/world'
 import { lifeKindLabel, terrainLabel } from '../viewport/tileColors'
+import { InspectorPreview } from '../viewport/InspectorPreview'
+import {
+  representativeAgent,
+  representativeOrganism,
+} from '../viewport/visualGenes'
 
 export function InspectorPanel() {
   const selectedTile = useSimulationStore((s) => s.selectedTile)
@@ -31,9 +36,34 @@ export function InspectorPanel() {
   const topAgents = topAgentSpeciesOnTile(snapshot.agents.agents, selectedTile.x, selectedTile.y)
   const speciesNames = new Map(snapshot.life.species.map((s) => [s.id, s.name]))
   const speciesRoles = new Map(snapshot.life.species.map((s) => [s.id, s.trophicRole]))
+  const speciesById = new Map(snapshot.life.species.map((s) => [s.id, s]))
+
+  const previewSpeciesId =
+    selectedSpeciesId ??
+    topSpecies[0]?.speciesId ??
+    topAgents[0]?.speciesId ??
+    null
+  const previewSpecies = previewSpeciesId ? speciesById.get(previewSpeciesId) ?? null : null
+  const previewOrganism = representativeOrganism(tileLife, previewSpeciesId)
+  const previewAgent = representativeAgent(tileAgents, previewSpeciesId)
+  const previewPopulation = previewSpeciesId
+    ? (topSpecies.find((s) => s.speciesId === previewSpeciesId)?.count ?? 0) +
+      (topAgents.find((s) => s.speciesId === previewSpeciesId)?.count ?? 0)
+    : tileCount + agentCount
+  const previewBiomass = previewSpecies?.totalBiomass ?? tileBiomass
 
   return (
     <div className="space-y-4 text-sm text-slate-300">
+      {(previewSpecies || previewOrganism || previewAgent) && (
+        <InspectorPreview
+          tile={selectedTile}
+          species={previewSpecies}
+          organism={previewOrganism}
+          agent={previewAgent}
+          population={previewPopulation}
+          biomass={previewBiomass}
+        />
+      )}
       {selectedSpeciesId && (
         <button
           type="button"

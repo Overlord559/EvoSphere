@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react'
-import { Application, Container, Graphics } from 'pixi.js'
+import { Application } from 'pixi.js'
 import { useSimulationStore } from '../../store/simulationStore'
-import type { MobileAgent } from '../../types/agents'
-import type { OverlayMode, Tile, World } from '../../types/simulation'
 import { getTileAt } from '../../simulation/world'
-import { maxTileDensity } from '../../simulation/life/LifeSystem'
-import { colorForTile, OVERLAY_MODES, type TileColorContext } from './tileColors'
+import { OVERLAY_MODES } from './tileColors'
+import { createRenderLayers, type RenderLayers } from './renderLayers'
+import { renderWorld } from './organismRenderer'
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 8
@@ -18,117 +17,17 @@ interface ViewportState {
   zoom: number
 }
 
-function buildColorContext(
-  overlay: OverlayMode,
-  tileCounts: number[],
-  tileBiomass: number[],
-  activityTiles: number[],
-): TileColorContext | undefined {
-  if (overlay !== 'life' && overlay !== 'biomass') return undefined
-  return {
-    tileIndex: 0,
-    tileCounts,
-    tileBiomass,
-    maxTileCount: maxTileDensity(tileCounts),
-    maxTileBiomass: Math.max(0.01, ...tileBiomass),
-    activityTiles: activityTiles.length > 0 ? new Set(activityTiles) : undefined,
-  }
-}
-
-function drawWorld(
-  container: Container,
-  world: World,
-  overlay: OverlayMode,
-  tileSize: number,
-  selectedTile: Tile | null,
-  tileCounts: number[],
-  tileBiomass: number[],
-  activityTiles: number[],
-  speciesTileIndices: number[] | null,
-  agents: MobileAgent[],
-  selectedSpeciesId: string | null,
-): void {
-  container.removeChildren()
-
-  const baseContext = buildColorContext(overlay, tileCounts, tileBiomass, activityTiles)
-  const speciesSet =
-    speciesTileIndices && speciesTileIndices.length > 0
-      ? new Set(speciesTileIndices)
-      : null
-
-  for (const tile of world.tiles) {
-    const idx = tile.y * world.width + tile.x
-    const context: TileColorContext | undefined = baseContext
-      ? { ...baseContext, tileIndex: idx }
-      : undefined
-
-    const g = new Graphics()
-    g.rect(tile.x * tileSize, tile.y * tileSize, tileSize, tileSize)
-    g.fill(colorForTile(tile, overlay, context))
-    container.addChild(g)
-
-    if (context?.activityTiles?.has(idx) && (overlay === 'life' || overlay === 'biomass')) {
-      const pulse = new Graphics()
-      pulse.rect(tile.x * tileSize, tile.y * tileSize, tileSize, tileSize)
-      pulse.stroke({ width: 1, color: 0xfbbf24, alpha: 0.75 })
-      container.addChild(pulse)
-    }
-  }
-
-  if (speciesSet) {
-    for (const idx of speciesSet) {
-      const x = idx % world.width
-      const y = Math.floor(idx / world.width)
-      const highlight = new Graphics()
-      highlight.rect(x * tileSize, y * tileSize, tileSize, tileSize)
-      highlight.fill({ color: 0xa855f7, alpha: 0.28 })
-      highlight.stroke({ width: 1, color: 0xc084fc, alpha: 0.9 })
-      container.addChild(highlight)
-    }
-  }
-
-  const maxAgentsToDraw = 600
-  const agentsToDraw = agents.length > maxAgentsToDraw ? agents.slice(0, maxAgentsToDraw) : agents
-  for (const agent of agentsToDraw) {
-    const cx = agent.x * tileSize + tileSize / 2
-    const cy = agent.y * tileSize + tileSize / 2
-    const isSelectedSpecies = agent.speciesId === selectedSpeciesId
-    let color = 0x4ade80
-    if (agent.trophicRole === 'predator') color = 0xf87171
-    else if (agent.trophicRole === 'scavenger') color = 0xfbbf24
-
-    const dot = new Graphics()
-    const radius = isSelectedSpecies ? tileSize * 0.28 : tileSize * 0.2
-    dot.circle(cx, cy, radius)
-    dot.fill({ color, alpha: isSelectedSpecies ? 0.95 : 0.82 })
-    if (isSelectedSpecies) {
-      dot.stroke({ width: 1, color: 0xffffff, alpha: 0.7 })
-    }
-    container.addChild(dot)
-  }
-
-  if (selectedTile) {
-    const outline = new Graphics()
-    outline.rect(
-      selectedTile.x * tileSize,
-      selectedTile.y * tileSize,
-      tileSize,
-      tileSize,
-    )
-    outline.stroke({ width: 1, color: 0x22d3ee, alpha: 0.95 })
-    container.addChild(outline)
-  }
-}
-
 export function WorldViewport() {
   const containerRef = useRef<HTMLDivElement>(null)
   const appRef = useRef<Application | null>(null)
-  const worldContainerRef = useRef<Container | null>(null)
+  const layersRef = useRef<RenderLayers | null>(null)
   const viewportRef = useRef<ViewportState>({ panX: 0, panY: 0, zoom: 1 })
   const dragRef = useRef({ active: false, lastX: 0, lastY: 0, moved: false })
 
   const overlayMode = useSimulationStore((s) => s.overlayMode)
+  const visualMode = useSimulationStore((s) => s.visualMode)
   const setOverlayMode = useSimulationStore((s) => s.setOverlayMode)
+  const setVisualMode = useSimulationStore((s) => s.setVisualMode)
   const selectTile = useSimulationStore((s) => s.selectTile)
   const selectedTile = useSimulationStore((s) => s.selectedTile)
   const snapshot = useSimulationStore((s) => s.snapshot)
@@ -136,11 +35,35 @@ export function WorldViewport() {
   const selectedSpeciesId = useSimulationStore((s) => s.selectedSpeciesId)
 
   const world = snapshot.world
-  const { tileCounts, tileBiomass, speciesOccupancy } = snapshot.life
+  const { tileCounts, tileBiomass, speciesOccupancy, organisms } = snapshot.life
   const agents = snapshot.agents.agents
   const speciesTileIndices = selectedSpeciesId
     ? (speciesOccupancy[selectedSpeciesId]?.tileIndices ?? null)
     : null
+
+  const redrawRef = useRef<() => void>(() => {})
+
+  const redraw = () => {
+    const layers = layersRef.current
+    if (!layers) return
+    renderWorld(layers, {
+      world,
+      overlay: overlayMode,
+      tileSize: BASE_TILE_SIZE,
+      zoom: viewportRef.current.zoom,
+      visualMode,
+      tileCounts,
+      tileBiomass,
+      organisms,
+      agents,
+      activityTiles: recentActivityTiles,
+      speciesTileIndices,
+      selectedSpeciesId,
+      selectedTile,
+    })
+  }
+
+  redrawRef.current = redraw
 
   useEffect(() => {
     const host = containerRef.current
@@ -154,7 +77,7 @@ export function WorldViewport() {
       app = new Application()
       await app.init({
         background: 0x0a0e14,
-        antialias: false,
+        antialias: true,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
       })
@@ -167,10 +90,10 @@ export function WorldViewport() {
       host.innerHTML = ''
       host.appendChild(app.canvas)
 
-      const worldContainer = new Container()
-      app.stage.addChild(worldContainer)
+      const layers = createRenderLayers()
+      app.stage.addChild(layers.root)
       appRef.current = app
-      worldContainerRef.current = worldContainer
+      layersRef.current = layers
 
       const resize = () => {
         if (!app || destroyed) return
@@ -185,7 +108,8 @@ export function WorldViewport() {
         const vp = viewportRef.current
         const delta = e.deltaY > 0 ? 0.9 : 1.1
         vp.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, vp.zoom * delta))
-        worldContainer.scale.set(vp.zoom)
+        layers.root.scale.set(vp.zoom)
+        redrawRef.current()
       }
 
       const onPointerDown = (e: PointerEvent) => {
@@ -203,7 +127,7 @@ export function WorldViewport() {
         const vp = viewportRef.current
         vp.panX += dx
         vp.panY += dy
-        worldContainer.position.set(vp.panX, vp.panY)
+        layers.root.position.set(vp.panX, vp.panY)
       }
 
       const onPointerUp = () => {
@@ -232,22 +156,24 @@ export function WorldViewport() {
       app.canvas.addEventListener('click', onClick)
 
       const current = useSimulationStore.getState()
-      drawWorld(
-        worldContainer,
-        current.snapshot.world,
-        current.overlayMode,
-        BASE_TILE_SIZE,
-        current.selectedTile,
-        current.snapshot.life.tileCounts,
-        current.snapshot.life.tileBiomass,
-        current.recentActivityTiles,
-        current.selectedSpeciesId
+      renderWorld(layers, {
+        world: current.snapshot.world,
+        overlay: current.overlayMode,
+        tileSize: BASE_TILE_SIZE,
+        zoom: viewportRef.current.zoom,
+        visualMode: current.visualMode,
+        tileCounts: current.snapshot.life.tileCounts,
+        tileBiomass: current.snapshot.life.tileBiomass,
+        organisms: current.snapshot.life.organisms,
+        agents: current.snapshot.agents.agents,
+        activityTiles: current.recentActivityTiles,
+        speciesTileIndices: current.selectedSpeciesId
           ? (current.snapshot.life.speciesOccupancy[current.selectedSpeciesId]?.tileIndices ?? null)
           : null,
-        current.snapshot.agents.agents,
-        current.selectedSpeciesId,
-      )
-      centerWorld(worldContainer, current.snapshot.world, host, viewportRef.current)
+        selectedSpeciesId: current.selectedSpeciesId,
+        selectedTile: current.selectedTile,
+      })
+      centerWorld(layers.root, current.snapshot.world, host, viewportRef.current)
 
       cleanupListeners = () => {
         observer.disconnect()
@@ -268,29 +194,15 @@ export function WorldViewport() {
       if (appRef.current) {
         appRef.current.destroy(true, { children: true })
         appRef.current = null
-        worldContainerRef.current = null
+        layersRef.current = null
       }
       host.innerHTML = ''
     }
   }, [world.id, selectTile])
 
   useEffect(() => {
-    const worldContainer = worldContainerRef.current
-    if (!worldContainer) return
-    drawWorld(
-      worldContainer,
-      world,
-      overlayMode,
-      BASE_TILE_SIZE,
-      selectedTile,
-      tileCounts,
-      tileBiomass,
-      recentActivityTiles,
-      speciesTileIndices,
-      agents,
-      selectedSpeciesId,
-    )
-  }, [world, overlayMode, selectedTile, tileCounts, tileBiomass, snapshot.tick, recentActivityTiles, speciesTileIndices, agents, selectedSpeciesId])
+    redrawRef.current()
+  }, [world, overlayMode, visualMode, selectedTile, tileCounts, tileBiomass, snapshot.tick, recentActivityTiles, speciesTileIndices, agents, organisms, selectedSpeciesId])
 
   return (
     <div className="flex min-h-[320px] flex-1 flex-col rounded-lg border border-command-border bg-command-surface/60">
@@ -311,6 +223,32 @@ export function WorldViewport() {
             {label}
           </button>
         ))}
+        <span className="mx-2 text-slate-600">|</span>
+        <span className="mr-1 font-mono text-xs text-slate-500">VISUAL</span>
+        <button
+          type="button"
+          onClick={() => setVisualMode('organic')}
+          aria-pressed={visualMode === 'organic'}
+          className={`rounded px-2 py-1 font-mono text-xs transition-colors ${
+            visualMode === 'organic'
+              ? 'bg-emerald-500/15 text-emerald-400'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+          }`}
+        >
+          Organic
+        </button>
+        <button
+          type="button"
+          onClick={() => setVisualMode('debug')}
+          aria-pressed={visualMode === 'debug'}
+          className={`rounded px-2 py-1 font-mono text-xs transition-colors ${
+            visualMode === 'debug'
+              ? 'bg-amber-500/15 text-amber-400'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+          }`}
+        >
+          Debug
+        </button>
       </div>
       <div
         ref={containerRef}
@@ -318,15 +256,15 @@ export function WorldViewport() {
         aria-label="World viewport"
       />
       <p className="border-t border-command-border px-3 py-2 font-mono text-xs text-slate-500">
-        Scroll to zoom · drag to pan · click tile to inspect · green=grazer red=predator amber=scavenger dots
+        Scroll to zoom · drag to pan · click tile to inspect · Organic mode shows procedural creatures and biomes
       </p>
     </div>
   )
 }
 
 function centerWorld(
-  container: Container,
-  world: World,
+  container: import('pixi.js').Container,
+  world: import('../../types/simulation').World,
   host: HTMLDivElement,
   vp: ViewportState,
 ): void {

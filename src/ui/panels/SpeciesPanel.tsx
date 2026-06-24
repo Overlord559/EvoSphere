@@ -10,6 +10,7 @@ export function SpeciesPanel() {
   const clearSelectedSpecies = useSimulationStore((s) => s.clearSelectedSpecies)
   const focusSpecies = useSimulationStore((s) => s.focusSpecies)
   const popHistory = useSimulationStore((s) => s.snapshot.briefing)
+  const agents = useSimulationStore((s) => s.snapshot.agents)
 
   const aliveSpecies = life.species.filter((s) => s.population > 0)
   const selectedRecord = selectedSpeciesId
@@ -19,7 +20,7 @@ export function SpeciesPanel() {
     ? life.speciesOccupancy[selectedSpeciesId]
     : null
 
-  if (life.totalOrganisms === 0 && snapshot.agents.totalAgents === 0) {
+  if (life.totalOrganisms === 0 && agents.totalAgents === 0) {
     return (
       <p className="text-sm text-slate-400">
         No living organisms yet. Step the simulation or generate a world with suitable

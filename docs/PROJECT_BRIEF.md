@@ -22,7 +22,19 @@ Evolution and emergence are fascinating but hard to explore interactively. Most 
 4. **Browser-first** — no install, no backend, IndexedDB for persistence later
 5. **Honest scope** — no fake data, no dead controls, no spectacle without substance
 
-## v0.4 Mobile Agents + Predation + Food Webs ✅ (current)
+## v0.4.1 Spore-Inspired Visual Biology + Biome Renderer ✅ (current)
+
+Delivered:
+
+- Organic biome textures for all terrain types with overlay mode preservation
+- Procedural producer glyphs (algae, mats, stems, canopies, reeds, grass, vent mats)
+- Spore-inspired mobile creature silhouettes (grazer / predator / scavenger)
+- Visual gene mapping from real genome traits
+- Zoom-tier detail (far / medium / close)
+- Selected species glow + tile highlight + inspector preview
+- Organic (default) / Debug visual mode toggle
+
+## v0.4 Mobile Agents + Predation + Food Webs ✅
 
 Delivered:
 

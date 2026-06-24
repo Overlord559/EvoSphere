@@ -16,6 +16,8 @@ import { createRng, randomFloat } from '../utils/rng'
 
 export type PanelId = 'world' | 'species' | 'events' | 'inspector' | 'briefing' | 'roadmap'
 
+export type VisualMode = 'organic' | 'debug'
+
 const DEFAULT_SETTINGS: SimulationSettings = {
   seed: 'evosphere-prime',
   worldWidth: 96,
@@ -52,6 +54,7 @@ interface SimulationStore {
   activePanel: PanelId
   phase: string
   overlayMode: OverlayMode
+  visualMode: VisualMode
   selectedTile: Tile | null
   selectedSpeciesId: string | null
   settings: SimulationSettings
@@ -64,6 +67,7 @@ interface SimulationStore {
 
   setActivePanel: (panel: PanelId) => void
   setOverlayMode: (mode: OverlayMode) => void
+  setVisualMode: (mode: VisualMode) => void
   selectTile: (tile: Tile | null) => void
   selectSpecies: (speciesId: string) => void
   clearSelectedSpecies: () => void
@@ -83,8 +87,9 @@ const initialEngine = createEngine(DEFAULT_SETTINGS)
 
 export const useSimulationStore = create<SimulationStore>((set, get) => ({
   activePanel: 'world',
-  phase: 'v0.4 agents',
+  phase: 'v0.4.1 visual biology',
   overlayMode: 'terrain',
+  visualMode: 'organic',
   selectedTile: null,
   selectedSpeciesId: null,
   settings: { ...DEFAULT_SETTINGS },
@@ -97,6 +102,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
 
   setActivePanel: (panel) => set({ activePanel: panel }),
   setOverlayMode: (mode) => set({ overlayMode: mode }),
+  setVisualMode: (mode) => set({ visualMode: mode }),
   selectTile: (tile) => set({ selectedTile: tile }),
 
   selectSpecies: (speciesId) => {

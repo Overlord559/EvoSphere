@@ -42,7 +42,7 @@ EvoSphere is a client-only single-page application. Simulation logic lives under
 | `src/simulation/behavior/` | Mobile goal selection and movement |
 | `src/simulation/ecology/` | Energy, colonization, herbivory, predation, food web |
 | `src/ui/panels/` | Command-center side panels |
-| `src/ui/viewport/` | Pixi canvas host + tile color maps |
+| `src/ui/viewport/` | Pixi canvas host, organic biome renderer, creature/plant glyphs, visual genes |
 
 ## Deterministic World Generation (v0.2)
 
@@ -185,16 +185,52 @@ Modules:
 
 Population controls: max 4 organisms/tile, max 5000 total.
 
-## Pixi Viewport
+## Pixi Viewport (v0.4.1)
 
-`WorldViewport` mounts a Pixi `Application` inside a React container:
+`WorldViewport` mounts a Pixi `Application` inside a React container with layered rendering:
 
-- Reads `snapshot.world` and `overlayMode` from Zustand only
+| Module | Role |
+|--------|------|
+| `renderLayers.ts` | Terrain → plants → agents → species highlight → activity → selection |
+| `biomeRenderer.ts` | Organic per-biome textures (not flat square tiles) |
+| `plantGlyphs.ts` | Aggregate producer glyphs by tile density/biomass |
+| `agentGlyphs.ts` | Procedural creature silhouettes from agent kind + genome |
+| `visualGenes.ts` | Trait → visual parameter mapping; zoom detail tiers |
+| `organismRenderer.ts` | Orchestrates full world draw; organic vs debug mode |
+| `InspectorPreview.tsx` | Mini Pixi preview in Inspector panel |
+| `tileColors.ts` | Overlay color maps (terrain, life, biomass, climate) |
+
+- Reads `snapshot.world`, `overlayMode`, `visualMode` from Zustand only
 - Never mutates simulation state
-- Supports pan, zoom, tile click → `selectTile`
-- Climate overlays plus **life** and **biomass** density overlays with gamma-scaled visibility
-- Highlights **selected species** tiles with violet fill + outline (`speciesOccupancy.tileIndices`)
-- Destroys Pixi app on unmount to avoid duplicate canvases
+- Supports pan, zoom (detail tier changes with zoom), tile click → `selectTile`
+- Climate overlays plus **life** and **biomass** density overlays
+- Highlights **selected species** tiles with violet fill + outline
+- **Organic mode** (default): biomes + glyphs; **Debug mode**: flat tiles + dots
+- Destroys Pixi app on unmount
+
+### Visual gene mapping
+
+| Trait | Visual effect |
+|-------|---------------|
+| speed | leg count, appendage length, slimmer body |
+| stamina | body scale |
+| sensoryRange | eye scale, antenna count, second eye at close zoom |
+| huntingEfficiency | mouth/jaw size, claws |
+| grazingEfficiency | wider beak/mouth |
+| aggression | angular body, spines |
+| fearfulness | compact posture |
+| waterTolerance | fin emphasis |
+| biomass / health / energy | glyph size, opacity, brightness |
+
+### Zoom detail
+
+| Zoom | Detail |
+|------|--------|
+| &lt; 1.5 | Simplified shaped glyphs |
+| 1.5 – 3 | Body + head + basic appendages |
+| ≥ 3 | Full mouths, eyes, tails, legs, antennae, plant branches |
+
+## Pixi Viewport (v0.3.2 — superseded by v0.4.1 layers)
 
 ## UI Panels
 

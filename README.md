@@ -1,12 +1,22 @@
 # EvoSphere
 
-Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, mobile agents with predation, and real-time Pixi viewport rendering.
+Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, mobile agents with predation, and Spore-inspired procedural Pixi viewport rendering.
 
-**Current phase:** v0.4 mobile agents + predation + food webs
+**Current phase:** v0.4.1 Spore-Inspired Visual Biology + Biome Renderer
 
 ## Status
 
-v0.4 adds the first “creatures moving and eating” milestone:
+v0.4.1 upgrades the visual layer from debug pixels to observable living forms:
+
+- **Organic biome renderer** — textured terrain per biome (ocean waves, forest canopies, grass strokes, desert dunes, swamp reeds, volcanic embers, hydrothermal vents)
+- **Procedural plant/producer glyphs** — algae clouds, microbial mats, stems, canopies, reeds, grass clusters keyed to density/biomass
+- **Spore-inspired creature glyphs** — grazers, predators, scavengers with body, head, eyes, mouth, tail, legs/fins/antennae
+- **Visual genes** — genome traits (speed, stamina, sensory range, hunting/grazing efficiency, aggression, water tolerance) map to silhouette
+- **Zoom-level detail** — simplified glyphs when zoomed out, full appendages when zoomed in
+- **Organic / Debug toggle** — Organic default; Debug restores flat tiles and colored dots
+- **Inspector visual preview** — creature or producer glyph with species stats and visible traits
+
+v0.4 foundation:
 
 - **Mobile agents** — SimpleGrazer, SimplePredator, Scavenger with mobile genomes and trophic roles
 - **Movement** — deterministic goals (find food, graze, hunt, flee, migrate, wander, rest, seek mate) with terrain energy costs
@@ -27,7 +37,7 @@ Tools, culture, civilization, and 3D remain out of scope.
 
 - Vite + React + TypeScript
 - Tailwind CSS v4
-- Pixi.js (tile viewport + life overlays + agent dots)
+- **Viewport** — organic biomes + procedural creature/plant glyphs (Pixi.js primitives, no external assets)
 - Zustand (UI + session state)
 - seedrandom (deterministic RNG)
 - nanoid (entity/species/event IDs)
