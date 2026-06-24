@@ -50,6 +50,9 @@ export interface LatestDevelopment {
   severity: 'info' | 'warning' | 'positive'
   year: number
   tick: number
+  /** Optional tile focus for viewport navigation. */
+  focusTileX?: number
+  focusTileY?: number
 }
 
 export interface BriefingSnapshot {
@@ -138,9 +141,38 @@ export type EventCategory =
 
 export type SimSpeed = 'normal' | 'fast' | 'superfast' | 'ultrafast' | 'deep'
 
+export type ThrottleStatus = 'ok' | 'catching_up' | 'throttled' | 'overloaded'
+
+export interface PerformanceStats {
+  fpsEstimate: number
+  simMsPerFrame: number
+  lastFrameSimMs: number
+  drawnTiles: number
+  drawnAgents: number
+  drawnPlantTiles: number
+  lodLevel: 'far' | 'medium' | 'close'
+}
+
 export interface RuntimeState {
   isRunning: boolean
   speed: SimSpeed
+  throttleStatus: ThrottleStatus
+  /** Warning message when simulation degrades. */
+  throttleMessage: string | null
+  pauseWhileInspecting: boolean
+  followSelectedSpecies: boolean
+  performance: PerformanceStats
+  /** Internal tick counter mirrored from engine (may lead snapshot). */
+  internalTick: number
+  lastSnapshotTick: number
+  simulatedYear: number
+}
+
+export interface CameraFocusRequest {
+  tileX: number
+  tileY: number
+  zoom?: number
+  id: number
 }
 
 export interface AgentVisualState {

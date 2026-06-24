@@ -6,6 +6,13 @@ import {
   fractalNoise,
   jitteredNoise,
 } from './noise'
+import {
+  applyPlanetEdgeClimate,
+  buildActiveMask,
+  computePlanetGeometry,
+  isTileActiveOnPlanet,
+  markVoidTile,
+} from './planetMask'
 
 const SEA_LEVEL = 0.38
 const DEEP_OCEAN_LEVEL = 0.22
@@ -140,6 +147,7 @@ function carveRivers(
   moistureGrid: number[][],
   terrainGrid: TerrainType[][],
   settings: SimulationSettings,
+  geometry: ReturnType<typeof computePlanetGeometry>,
 ): void {
   const { seed, worldWidth, worldHeight } = settings
   const riverRng = forkRng(seed, 'rivers')
@@ -162,6 +170,7 @@ function carveRivers(
     }
 
     for (let step = 0; step < worldWidth + worldHeight; step++) {
+      if (!isTileActiveOnPlanet(x, y, geometry)) break
       const terrain = terrainGrid[y][x]
       if (terrain === 'ocean' || terrain === 'deep_ocean' || terrain === 'coast') break
       if (elevationGrid[y][x] > SEA_LEVEL && moistureGrid[y][x] > 0.35) {
@@ -196,6 +205,7 @@ function applyVolcanicFeatures(
   elevationGrid: number[][],
   terrainGrid: TerrainType[][],
   settings: SimulationSettings,
+  geometry: ReturnType<typeof computePlanetGeometry>,
 ): void {
   const { seed, worldWidth, worldHeight } = settings
   const volcRng = forkRng(seed, 'volcanic')
@@ -203,6 +213,7 @@ function applyVolcanicFeatures(
 
   for (let y = 0; y < worldHeight; y++) {
     for (let x = 0; x < worldWidth; x++) {
+      if (!isTileActiveOnPlanet(x, y, geometry)) continue
       const terrain = terrainGrid[y][x]
       const elev = elevationGrid[y][x]
 
@@ -219,6 +230,7 @@ function buildTerrainGrid(
   elevationGrid: number[][],
   moistureGrid: number[][],
   settings: SimulationSettings,
+  geometry: ReturnType<typeof computePlanetGeometry>,
 ): TerrainType[][] {
   const { worldWidth, worldHeight } = settings
   const tempRng = forkRng(settings.seed, 'temperature')
@@ -228,6 +240,10 @@ function buildTerrainGrid(
     terrainGrid[y] = []
     const latitude = latitudeFromY(y, worldHeight)
     for (let x = 0; x < worldWidth; x++) {
+      if (!isTileActiveOnPlanet(x, y, geometry)) {
+        terrainGrid[y][x] = 'void'
+        continue
+      }
       const elevation = elevationGrid[y][x]
       const moisture = moistureGrid[y][x]
       const tempVar = tempRng()
@@ -243,8 +259,8 @@ function buildTerrainGrid(
     }
   }
 
-  carveRivers(elevationGrid, moistureGrid, terrainGrid, settings)
-  applyVolcanicFeatures(elevationGrid, terrainGrid, settings)
+  carveRivers(elevationGrid, moistureGrid, terrainGrid, settings, geometry)
+  applyVolcanicFeatures(elevationGrid, terrainGrid, settings, geometry)
   return terrainGrid
 }
 
@@ -253,6 +269,7 @@ function gridToTiles(
   moistureGrid: number[][],
   terrainGrid: TerrainType[][],
   settings: SimulationSettings,
+  geometry: ReturnType<typeof computePlanetGeometry>,
 ): Tile[] {
   const { worldWidth, worldHeight, seed } = settings
   const tempRng = forkRng(seed, 'temperature-tiles')
@@ -262,15 +279,30 @@ function gridToTiles(
   for (let y = 0; y < worldHeight; y++) {
     const latitude = latitudeFromY(y, worldHeight)
     for (let x = 0; x < worldWidth; x++) {
+      const terrain = terrainGrid[y][x]
+      if (terrain === 'void' || !isTileActiveOnPlanet(x, y, geometry)) {
+        tiles.push({
+          x,
+          y,
+          terrain: 'void',
+          elevation: 0,
+          moisture: 0,
+          temperature: 0,
+          water: 0,
+          soilFertility: 0,
+          resourceDeposits: 0,
+        })
+        continue
+      }
+
       const elevation = elevationGrid[y][x]
       const moisture = moistureGrid[y][x]
-      const terrain = terrainGrid[y][x]
       const temperature = computeTemperature(elevation, latitude, tempRng())
       const water = computeWater(elevation, moisture, terrain)
       const soilFertility = computeSoilFertility(terrain, moisture, temperature, elevation)
       const resourceDeposits = computeResourceDeposits(terrain, elevation, resourceRng())
 
-      tiles.push({
+      const tile: Tile = {
         x,
         y,
         terrain,
@@ -280,7 +312,9 @@ function gridToTiles(
         water,
         soilFertility,
         resourceDeposits,
-      })
+      }
+      applyPlanetEdgeClimate(tile, geometry)
+      tiles.push(tile)
     }
   }
 
@@ -289,10 +323,16 @@ function gridToTiles(
 
 /** Deterministic procedural world from seed and settings. */
 export function generateWorld(settings: SimulationSettings): World {
+  const geometry = computePlanetGeometry(settings)
   const elevationGrid = getElevationGrid(settings)
   const moistureGrid = getMoistureGrid(settings)
-  const terrainGrid = buildTerrainGrid(elevationGrid, moistureGrid, settings)
-  const tiles = gridToTiles(elevationGrid, moistureGrid, terrainGrid, settings)
+  const terrainGrid = buildTerrainGrid(elevationGrid, moistureGrid, settings, geometry)
+  const tiles = gridToTiles(elevationGrid, moistureGrid, terrainGrid, settings, geometry)
+  const activeMask = buildActiveMask(settings, geometry)
+
+  for (let i = 0; i < tiles.length; i++) {
+    if (!activeMask[i]) markVoidTile(tiles[i])
+  }
 
   return {
     id: nanoid(),
@@ -301,10 +341,24 @@ export function generateWorld(settings: SimulationSettings): World {
     height: settings.worldHeight,
     tiles,
     tick: 0,
+    planetCenterX: geometry.centerX,
+    planetCenterY: geometry.centerY,
+    planetRadius: geometry.radius,
+    activeMask,
   }
 }
 
 export function getTileAt(world: World, x: number, y: number): Tile | undefined {
+  if (x < 0 || y < 0 || x >= world.width || y >= world.height) return undefined
+  const tile = world.tiles[tileIndex(x, y, world.width)]
+  if (!tile || tile.terrain === 'void' || !world.activeMask[tileIndex(x, y, world.width)]) {
+    return undefined
+  }
+  return tile
+}
+
+/** Returns tile even on void/inactive cells (for inspector). */
+export function getTileAtRaw(world: World, x: number, y: number): Tile | undefined {
   if (x < 0 || y < 0 || x >= world.width || y >= world.height) return undefined
   return world.tiles[tileIndex(x, y, world.width)]
 }

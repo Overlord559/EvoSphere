@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { useSimulationStore } from '../../store/simulationStore'
 import type { SimSpeed } from '../../types/runtime'
+import type { WorldSizePreset } from '../../types/simulation'
+import { WORLD_SIZE_PRESETS } from '../../simulation/world/worldSizePresets'
 import { formatSimYears, buildSimTimeDisplay } from '../../simulation/engine/simTime'
 
 const SPEEDS: { id: Exclude<SimSpeed, 'deep'>; label: string; hint: string }[] = [
-  { id: 'normal', label: 'Normal', hint: 'smooth playback' },
-  { id: 'fast', label: 'Fast Forward', hint: '8× steps/frame' },
-  { id: 'superfast', label: 'Super Fast', hint: '30× steps/frame' },
-  { id: 'ultrafast', label: 'Ultra Fast', hint: '100× steps/frame' },
+  { id: 'normal', label: 'Normal', hint: '1 step/frame · full snapshots' },
+  { id: 'fast', label: 'Fast Forward', hint: 'time-budgeted · throttled snapshots' },
+  { id: 'superfast', label: 'Super Fast', hint: 'bounded batch · lighter briefing' },
+  { id: 'ultrafast', label: 'Ultra Fast', hint: 'max budget · snapshot throttling' },
 ]
 
 const DEEP_TIME_JUMPS = [
@@ -19,12 +21,17 @@ const DEEP_TIME_JUMPS = [
   { years: 1_000_000, label: '+1M yr', hint: 'very slow' },
 ]
 
+const WORLD_PRESETS = Object.entries(WORLD_SIZE_PRESETS) as Array<
+  [WorldSizePreset, (typeof WORLD_SIZE_PRESETS)[WorldSizePreset]]
+>
+
 export function SimulationControls() {
   const runtime = useSimulationStore((s) => s.runtime)
   const visualMode = useSimulationStore((s) => s.visualMode)
   const deepTimeRunning = useSimulationStore((s) => s.deepTimeRunning)
   const deepTimeProgress = useSimulationStore((s) => s.deepTimeProgress)
   const snapshot = useSimulationStore((s) => s.snapshot)
+  const settings = useSimulationStore((s) => s.settings)
   const play = useSimulationStore((s) => s.play)
   const pause = useSimulationStore((s) => s.pause)
   const stepSimulation = useSimulationStore((s) => s.stepSimulation)
@@ -33,15 +40,19 @@ export function SimulationControls() {
   const cancelDeepTime = useSimulationStore((s) => s.cancelDeepTime)
   const resetWorld = useSimulationStore((s) => s.resetWorld)
   const newWorldRandomSeed = useSimulationStore((s) => s.newWorldRandomSeed)
+  const setWorldSizePreset = useSimulationStore((s) => s.setWorldSizePreset)
+  const setPauseWhileInspecting = useSimulationStore((s) => s.setPauseWhileInspecting)
+  const setFollowSelectedSpecies = useSimulationStore((s) => s.setFollowSelectedSpecies)
 
   const [debugOpen, setDebugOpen] = useState(false)
   const simTime = buildSimTimeDisplay(
-    snapshot.tick,
+    runtime.internalTick,
     snapshot.life,
     snapshot.agents,
     runtime.speed,
   )
   const isRunning = runtime.isRunning
+  const perf = runtime.performance
 
   const progressPct = deepTimeProgress
     ? Math.min(100, Math.round((deepTimeProgress.completedTicks / deepTimeProgress.totalTicks) * 100))
@@ -59,13 +70,19 @@ export function SimulationControls() {
         </p>
         {visualMode === 'debug' && (
           <p className="mt-1 font-mono text-[10px] text-slate-600">
-            internal tick {simTime.internalTick}
+            internal tick {runtime.internalTick} · snapshot @ {runtime.lastSnapshotTick} · v
+            {snapshot.renderSnapshotVersion}
           </p>
         )}
         {isRunning && !deepTimeRunning && (
           <span className="mt-2 inline-block rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] text-emerald-400">
             {simTime.speedLabel} · LIVE
           </span>
+        )}
+        {runtime.throttleStatus !== 'ok' && (
+          <p className="mt-2 font-mono text-[10px] text-amber-300">
+            {runtime.throttleMessage ?? `Status: ${runtime.throttleStatus}`}
+          </p>
         )}
       </div>
 
@@ -95,9 +112,6 @@ export function SimulationControls() {
               <> · ~{(deepTimeProgress.estimatedRemainingMs / 1000).toFixed(0)}s remaining</>
             )}
           </p>
-          <p className="font-mono text-[10px] text-amber-500/80">
-            Long-running exact mode — may take minutes for +100K / +1M years
-          </p>
         </div>
       )}
 
@@ -120,7 +134,29 @@ export function SimulationControls() {
       </div>
 
       <div>
-        <p className="mb-1.5 font-mono text-xs text-slate-500">PLAYBACK SPEED</p>
+        <p className="mb-1.5 font-mono text-xs text-slate-500">WORLD SIZE (circular planet)</p>
+        <div className="flex flex-wrap gap-1">
+          {WORLD_PRESETS.map(([id, { label }]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setWorldSizePreset(id)}
+              disabled={isRunning || deepTimeRunning}
+              aria-pressed={settings.worldSizePreset === id}
+              className={`rounded px-2 py-1 font-mono text-xs transition-colors disabled:opacity-40 ${
+                settings.worldSizePreset === id
+                  ? 'bg-command-accent/15 text-command-accent'
+                  : 'border border-command-border text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-1.5 font-mono text-xs text-slate-500">PLAYBACK SPEED (time-budgeted)</p>
         <div className="flex flex-wrap gap-1">
           {SPEEDS.map(({ id, label, hint }) => (
             <button
@@ -143,6 +179,25 @@ export function SimulationControls() {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3 font-mono text-[10px] text-slate-500">
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={runtime.pauseWhileInspecting}
+            onChange={(e) => setPauseWhileInspecting(e.target.checked)}
+          />
+          Pause while inspecting
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={runtime.followSelectedSpecies}
+            onChange={(e) => setFollowSelectedSpecies(e.target.checked)}
+          />
+          Follow selected species
+        </label>
       </div>
 
       <div>
@@ -176,23 +231,45 @@ export function SimulationControls() {
             </button>
           )}
           {(visualMode === 'debug' || debugOpen) && (
-            <div className="flex flex-wrap gap-2">
-              <ControlButton onClick={() => stepSimulation(1)} disabled={isRunning || deepTimeRunning}>
-                +1 internal step
-              </ControlButton>
-              <ControlButton onClick={() => stepSimulation(10)} disabled={isRunning || deepTimeRunning}>
-                +10 steps
-              </ControlButton>
-              <ControlButton onClick={() => stepSimulation(100)} disabled={isRunning || deepTimeRunning}>
-                +100 steps
-              </ControlButton>
-              <span className="self-center font-mono text-[10px] text-slate-600">
-                tick {snapshot.tick}
-              </span>
-            </div>
+            <>
+              <div className="mb-2 flex flex-wrap gap-2">
+                <ControlButton onClick={() => stepSimulation(1)} disabled={isRunning || deepTimeRunning}>
+                  +1 internal step
+                </ControlButton>
+                <ControlButton onClick={() => stepSimulation(10)} disabled={isRunning || deepTimeRunning}>
+                  +10 steps
+                </ControlButton>
+                <ControlButton onClick={() => stepSimulation(100)} disabled={isRunning || deepTimeRunning}>
+                  +100 steps
+                </ControlButton>
+              </div>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[10px] text-slate-500">
+                <Row label="FPS est." value={String(perf.fpsEstimate)} />
+                <Row label="Sim ms/frame" value={perf.lastFrameSimMs.toFixed(1)} />
+                <Row label="Internal tick" value={String(runtime.internalTick)} />
+                <Row label="Snapshot tick" value={String(runtime.lastSnapshotTick)} />
+                <Row label="Agents" value={String(snapshot.agents.totalAgents)} />
+                <Row label="Organisms" value={String(snapshot.life.totalOrganisms)} />
+                <Row label="Species" value={String(snapshot.life.species.filter((s) => s.population > 0).length)} />
+                <Row label="Drawn tiles" value={String(perf.drawnTiles)} />
+                <Row label="Drawn agents" value={String(perf.drawnAgents)} />
+                <Row label="Plant tiles" value={String(perf.drawnPlantTiles)} />
+                <Row label="LOD" value={perf.lodLevel} />
+                <Row label="Throttle" value={runtime.throttleStatus} />
+              </dl>
+            </>
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-2">
+      <dt>{label}</dt>
+      <dd className="text-slate-300">{value}</dd>
     </div>
   )
 }

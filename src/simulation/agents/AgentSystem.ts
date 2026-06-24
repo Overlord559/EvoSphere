@@ -24,6 +24,11 @@ import { computeGrazeEnergyGain, movementEnergyCost, terrainMovementCost } from 
 import { findPreyInRange, resolvePredation } from '../ecology/predation'
 import { mutateMobileGenome, shouldSpeciateMobile } from '../genetics/agentMutation'
 import { getTileAt } from '../world/generateWorld'
+import { isTileActive } from '../world/planetMask'
+import {
+  clampAgentVitals,
+  sanitizeAgent,
+} from '../engine/stabilityGuards'
 import type { LifeSystem } from '../life/LifeSystem'
 import { SpeciesRegistry } from '../species/speciesRegistry'
 import { DEFAULT_SPECIATION_CONFIG } from '../species/speciationConfig'
@@ -67,6 +72,7 @@ export class AgentSystem {
 
     for (const tile of world.tiles) {
       if (spawned >= 24) break
+      if (!isTileActive(world, tile.x, tile.y)) continue
       const idx = tile.y * world.width + tile.x
       const biomass = this.life.getTileBiomassArray()[idx] ?? 0
       if (
@@ -81,6 +87,7 @@ export class AgentSystem {
 
     for (const tile of world.tiles) {
       if (spawned >= 32) break
+      if (!isTileActive(world, tile.x, tile.y)) continue
       const idx = tile.y * world.width + tile.x
       const grazerHere = this.tileAgentCounts[idx] ?? 0
       const biomass = this.life.getTileBiomassArray()[idx] ?? 0
@@ -97,6 +104,7 @@ export class AgentSystem {
 
     for (const tile of world.tiles) {
       if (spawned >= 36) break
+      if (!isTileActive(world, tile.x, tile.y)) continue
       if (
         (tile.terrain === 'coast' || tile.terrain === 'swamp') &&
         spawnRng() > 0.95
@@ -242,6 +250,25 @@ export class AgentSystem {
       this.tick(world, t, NOOP_EMIT, true)
     }
     return t
+  }
+
+  quarantineInvalid(world: World): number {
+    let removed = 0
+    const next: MobileAgent[] = []
+    for (const agent of this.agents) {
+      const reason = sanitizeAgent(agent, world)
+      if (reason) {
+        removed += 1
+        continue
+      }
+      clampAgentVitals(agent)
+      next.push(agent)
+    }
+    if (removed > 0) {
+      this.agents = next
+      this.rebuildIndexes(world)
+    }
+    return removed
   }
 
   getSnapshot(includeAgents = true): AgentSnapshot {
@@ -455,6 +482,7 @@ export class AgentSystem {
     tick: number,
     registry: SpeciesRegistry,
   ): void {
+    if (!isTileActive(world, x, y)) return
     if (this.countAtTile(x, y, world) >= MAX_AGENTS_PER_TILE) return
     if (this.agents.length >= MAX_TOTAL_AGENTS) return
 
@@ -465,6 +493,7 @@ export class AgentSystem {
   }
 
   private moveAgent(agent: MobileAgent, x: number, y: number, world: World): void {
+    if (!isTileActive(world, x, y)) return
     const oldIdx = agent.y * world.width + agent.x
     const newIdx = y * world.width + x
     this.tileAgentCounts[oldIdx] = Math.max(0, (this.tileAgentCounts[oldIdx] ?? 0) - 1)

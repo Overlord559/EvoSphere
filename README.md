@@ -1,44 +1,29 @@
 # EvoSphere
 
-Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, mobile agents with predation, and Spore-inspired procedural Pixi viewport rendering.
+Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, mobile agents with predation, circular planet viewport, and Spore-inspired procedural Pixi rendering.
 
-**Current phase:** v0.4.2 Real-Time Living Simulation UX + Time Semantics
+**Current phase:** v0.4.3 Stability + Bigger Circular World + Zoom Inspection
 
 ## Status
 
-v0.4.2 makes the world feel alive instead of tick-debugged:
+v0.4.3 engine stability + planet topology:
 
-- **Simulated time UI** — years, eras, generations; ticks hidden unless Debug mode
-- **Play-first controls** — Play/Pause, Normal/Fast/Super Fast/Ultra Fast (manual step moved to debug)
-- **Smooth agent motion** — tile-based sim with interpolated viewport movement
-- **Living animations** — creature wiggle, hunt/graze hints, plant pulse, river/vent shimmer, species glow pulse
-- **Latest Developments feed** — natural-language briefing from real simulation state
-- **Deep Time UX** — progress bar, current year, ETA, cancel, honest long-running labels
+- **Time-budgeted sim loop** — Normal/Fast/Super Fast/Ultra Fast use per-frame ms budget, not blind 100-tick batches
+- **Snapshot throttling** — internal ticks can outpace UI snapshots; briefing/developments update less often in fast modes
+- **Circular planet mask** — active world is a round planet inside the grid; outside = space/void
+- **Bigger worlds** — Small 96² · Standard 192² · Large 256² · Experimental 384² presets
+- **Viewport culling + LOD** — only visible tiles/agents drawn; zoom tiers control glyph detail
+- **Zoom / focus inspection** — click tile or agent, Focus species, Inspector/Briefing zoom-to controls
+- **Stability guards** — max ticks/ms per frame, event caps, invalid entity quarantine, throttle warnings
+- **Performance HUD** — FPS, sim ms/frame, drawn counts, LOD, throttle status (Debug / Advanced)
 
-v0.4.1 visual layer:
+v0.4.2 living simulation UX:
 
-- **Organic biome renderer** — textured terrain per biome (ocean waves, forest canopies, grass strokes, desert dunes, swamp reeds, volcanic embers, hydrothermal vents)
-- **Procedural plant/producer glyphs** — algae clouds, microbial mats, stems, canopies, reeds, grass clusters keyed to density/biomass
-- **Spore-inspired creature glyphs** — grazers, predators, scavengers with body, head, eyes, mouth, tail, legs/fins/antennae
-- **Visual genes** — genome traits (speed, stamina, sensory range, hunting/grazing efficiency, aggression, water tolerance) map to silhouette
-- **Zoom-level detail** — simplified glyphs when zoomed out, full appendages when zoomed in
-- **Organic / Debug toggle** — Organic default; Debug restores flat tiles and colored dots
-- **Inspector visual preview** — creature or producer glyph with species stats and visible traits
+- Simulated time UI, Play-first controls, smooth agent interpolation, developments feed, Deep Time progress/cancel
 
-v0.4 foundation:
+v0.4.1 visual layer: organic biomes, procedural plant/creature glyphs, visual genes, Organic/Debug toggle
 
-- **Mobile agents** — SimpleGrazer, SimplePredator, Scavenger with mobile genomes and trophic roles
-- **Movement** — deterministic goals (find food, graze, hunt, flee, migrate, wander, rest, seek mate) with terrain energy costs
-- **Herbivory** — grazers consume producer biomass; overgrazing can collapse local patches
-- **Predation** — predators hunt mobile prey with efficiency/aggression vs speed/fear resolution
-- **Food web** — predator/prey links in species panel; briefing shows dominant grazer/predator and warnings
-- **Viewport dots** — green grazers, red predators, amber scavengers on the tile map
-- **Events** — throttled agent.spawned, agent.predation, agent.migrated, foodweb.* milestones
-- **Deep-time** — grazer/predator deltas, predation count, starvation count in summary
-
-v0.3.2 foundation:
-
-- Species selection + map highlight, deep-time performance (~5× +10K yr speedup)
+v0.4 foundation: mobile agents, herbivory, predation, food webs, deep-time summaries
 
 Tools, culture, civilization, and 3D remain out of scope.
 
@@ -46,8 +31,8 @@ Tools, culture, civilization, and 3D remain out of scope.
 
 - Vite + React + TypeScript
 - Tailwind CSS v4
-- **Viewport** — organic biomes + procedural creature/plant glyphs (Pixi.js primitives, no external assets)
-- Zustand (UI + session state)
+- **Viewport** — culling + LOD + circular planet (Pixi.js primitives)
+- Zustand (UI + session state + time-budgeted runtime loop)
 - seedrandom (deterministic RNG)
 - nanoid (entity/species/event IDs)
 
@@ -60,17 +45,17 @@ npm run build
 npm run lint
 ```
 
-## Deep-time performance (approximate, seed `evosphere-prime`, 96×96)
+## Deep-time performance (approximate, seed `evosphere-prime`, Standard 192×192)
 
 | Jump | Typical runtime |
 |------|-----------------|
-| +1K yr | ~15–25s |
-| +10K yr | ~2–4 min (includes mobile agent ticks) |
-| +100K / +1M | minutes — exact tick simulation, UI stays responsive via chunked async stepping |
+| +1K yr | ~20–40s |
+| +10K yr | ~3–6 min |
+| +100K / +1M | minutes — exact tick simulation, chunked async stepping |
 
 ## Simulation time
 
-- **Tick** — atomic simulation step
+- **Tick** — atomic simulation step (internal; Debug mode only in UI)
 - **Generation estimate** — ~25 ticks per generation
 - **Simulated years** — 10 ticks ≈ 1 year
 

@@ -18,6 +18,7 @@ export type TerrainType =
   | 'swamp'
   | 'volcanic'
   | 'hydrothermal_vent'
+  | 'void'
 
 export interface Tile {
   x: number
@@ -38,13 +39,23 @@ export interface World {
   height: number
   tiles: Tile[]
   tick: number
+  /** Planet center in tile coordinates. */
+  planetCenterX: number
+  planetCenterY: number
+  /** Active-world radius in tile units. */
+  planetRadius: number
+  /** Per-tile active mask — false = space/void outside planet. */
+  activeMask: boolean[]
 }
+
+export type WorldSizePreset = 'small' | 'standard' | 'large' | 'experimental'
 
 export interface SimulationSettings {
   seed: string
   worldWidth: number
   worldHeight: number
   tickRate: number
+  worldSizePreset: WorldSizePreset
 }
 
 export interface SimulationSnapshot {
@@ -56,6 +67,10 @@ export interface SimulationSnapshot {
   agents: AgentSnapshot
   briefing: BriefingSnapshot
   lastDeepTimeSummary: DeepTimeSummary | null
+  /** Monotonic version — increments when UI-facing snapshot is rebuilt. */
+  renderSnapshotVersion: number
+  /** Internal tick when this snapshot was assembled. */
+  lastSnapshotTick: number
 }
 
 export interface EventLogEntry {

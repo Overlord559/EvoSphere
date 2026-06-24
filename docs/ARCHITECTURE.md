@@ -86,16 +86,50 @@ Same `SimulationSettings` (seed, width, height) always yields identical `Tile[]`
 
 Deep-time buttons convert years → ticks via `yearsToTicks()`. Summaries report start/end tick and year.
 
-## Runtime Loop (v0.4.2)
+## Runtime Loop (v0.4.3)
 
 - `SimEngine` owns all mutation; ticks are **internal only**
-- UI displays **simulated years**, **eras**, and **generations**
-- Zustand store mirrors snapshots; `requestAnimationFrame` drives continuous run
-- Speed modes: `normal` (1 tick/frame), `fast` (8), `superfast` (30), `ultrafast` (100)
-- Viewport runs separate animation RAF for interpolation + visual effects
-- Agent visual states interpolate between tile positions (~320ms ease)
-- Deep time uses chunked stepping with progress, ETA, and cancel support
-- Auto-play enabled on load; manual step only in Debug/Advanced controls
+- Zustand `requestAnimationFrame` loop uses **time-budgeted stepping** (`simScheduler.ts`)
+- Speed modes cap work per frame (~10ms budget); never blocks main thread with 100-tick batches
+- Snapshots throttled by tick interval + ms interval per speed mode
+- `renderSnapshotVersion` drives viewport redraw; animation RAF separate from snapshot cadence
+- Deep time remains chunked, cancellable, async UI sync
+
+| Speed | Behavior |
+|-------|----------|
+| Normal | 1 tick/frame, full snapshot every tick |
+| Fast | ~4 ticks/frame budget, snapshot every 2 ticks / 80ms |
+| Super Fast | ~8 ticks/frame budget, lighter briefing, snapshot every 6 ticks |
+| Ultra Fast | ~12 ticks/frame budget, snapshot every 12 ticks / 180ms |
+
+Throttle states: `ok` · `catching_up` · `throttled` · `overloaded` — surfaced in controls + viewport
+
+## Circular Planet (v0.4.3)
+
+- `World.activeMask[]` — false outside planet radius
+- `void` terrain for inactive tiles — dark space in viewport
+- Life/agents cannot spawn, move, or reproduce on void tiles
+- Edge falloff biases rim tiles toward ocean/coast
+- `getTileAt()` returns undefined for void; `getTileAtRaw()` for inspector
+
+## World Size Presets (v0.4.3)
+
+| Preset | Size | Default |
+|--------|------|---------|
+| small | 96×96 | |
+| standard | 192×192 | ✅ |
+| large | 256×256 | |
+| experimental | 384×384 | explicit opt-in |
+
+## Viewport Culling + LOD (v0.4.3)
+
+- `viewportCulling.ts` — visible tile bounds from pan/zoom
+- Terrain/plants/agents drawn only in view + margin
+- LOD: far / medium / close glyph detail by zoom
+- Draw caps: agents 400–800, plant tiles 2000, detailed glyphs 120
+- Reused Graphics containers per layer (not per-tile objects)
+
+## Runtime Loop (v0.4.2 — superseded)
 
 ## Simulated Time (v0.4.2)
 

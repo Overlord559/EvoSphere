@@ -4,7 +4,7 @@ import type { LifeOrganism } from '../../types/life'
 import type { OverlayMode, Tile, World } from '../../types/simulation'
 import type { AgentVisualState } from '../../types/runtime'
 import { maxTileDensity } from '../../simulation/life/LifeSystem'
-import { drawOrganicTile, drawDebugTile } from './biomeRenderer'
+import { drawOrganicTile, drawDebugTile, drawVoidTile } from './biomeRenderer'
 import { drawAgentGlyph } from './agentGlyphs'
 import { drawPlantGlyphsForTile } from './plantGlyphs'
 import type { RenderLayers } from './renderLayers'
@@ -13,6 +13,18 @@ import type { TileColorContext } from './tileColors'
 import { zoomDetailLevel } from './visualGenes'
 import { interpolatedTilePosition, isAgentMoving } from './agentInterpolation'
 import { pulseAlpha } from './animationLayer'
+import {
+  isTileInBounds,
+  tileIndexInBounds,
+  type ViewBounds,
+} from './viewportCulling'
+import {
+  MAX_AGENTS_DRAWN_CLOSE,
+  MAX_AGENTS_DRAWN_FAR,
+  MAX_AGENTS_DRAWN_MEDIUM,
+  MAX_DETAILED_GLYPHS,
+  MAX_PLANT_GLYPH_TILES,
+} from '../../simulation/engine/stabilityGuards'
 
 export type VisualMode = 'organic' | 'debug'
 
@@ -33,6 +45,14 @@ export interface OrganismRenderContext {
   speciesTileIndices: number[] | null
   selectedSpeciesId: string | null
   selectedTile: Tile | null
+  viewBounds: ViewBounds
+}
+
+export interface RenderStats {
+  drawnTiles: number
+  drawnAgents: number
+  drawnPlantTiles: number
+  lodLevel: 'far' | 'medium' | 'close'
 }
 
 function buildColorContext(
@@ -63,7 +83,7 @@ function organismsByTile(organisms: LifeOrganism[], width: number): Map<number, 
   return map
 }
 
-export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): void {
+export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): RenderStats {
   clearAllLayers(layers)
 
   const {
@@ -83,6 +103,7 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): v
     speciesTileIndices,
     selectedSpeciesId,
     selectedTile,
+    viewBounds,
   } = ctx
 
   const baseContext = buildColorContext(overlay, tileCounts, tileBiomass, activityTiles)
@@ -95,98 +116,136 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): v
   const maxCount = maxTileDensity(tileCounts)
   const drawTile = visualMode === 'organic' ? drawOrganicTile : drawDebugTile
 
-  for (const tile of world.tiles) {
-    const idx = tile.y * world.width + tile.x
-    const colorContext: TileColorContext | undefined = baseContext
-      ? { ...baseContext, tileIndex: idx }
-      : undefined
+  let drawnTiles = 0
+  let drawnPlantTiles = 0
+  let detailedGlyphs = 0
 
-    const g = new Graphics()
-    if (visualMode === 'organic') {
-      drawOrganicTile(g, tile, tileSize, overlay, colorContext, animTimeMs, simTick)
-    } else {
-      drawTile(g, tile, tileSize, overlay, colorContext)
-    }
-    layers.terrain.addChild(g)
+  const terrainG = new Graphics()
+  const plantsG = new Graphics()
 
-    const tileOrgs = orgByTile.get(idx)
-    if (tileOrgs && tileOrgs.length > 0 && visualMode === 'organic') {
-      const pg = new Graphics()
-      drawPlantGlyphsForTile(
-        pg,
-        tile,
-        tileSize,
-        tileCounts[idx] ?? 0,
-        tileBiomass[idx] ?? 0,
-        maxCount,
-        tileOrgs,
-        detail,
-        selectedSpeciesId,
-        animTimeMs,
-      )
-      layers.plants.addChild(pg)
+  for (let y = viewBounds.minTileY; y <= viewBounds.maxTileY; y++) {
+    for (let x = viewBounds.minTileX; x <= viewBounds.maxTileX; x++) {
+      const idx = y * world.width + x
+      const tile = world.tiles[idx]
+      if (!tile) continue
+
+      if (tile.terrain === 'void' || !world.activeMask[idx]) {
+        drawVoidTile(terrainG, x * tileSize, y * tileSize, tileSize)
+        drawnTiles += 1
+        continue
+      }
+
+      const colorContext: TileColorContext | undefined = baseContext
+        ? { ...baseContext, tileIndex: idx }
+        : undefined
+
+      if (visualMode === 'organic') {
+        drawOrganicTile(terrainG, tile, tileSize, overlay, colorContext, animTimeMs, simTick)
+      } else {
+        drawTile(terrainG, tile, tileSize, overlay, colorContext)
+      }
+      drawnTiles += 1
+
+      const tileOrgs = orgByTile.get(idx)
+      if (
+        tileOrgs &&
+        tileOrgs.length > 0 &&
+        visualMode === 'organic' &&
+        drawnPlantTiles < MAX_PLANT_GLYPH_TILES
+      ) {
+        drawPlantGlyphsForTile(
+          plantsG,
+          tile,
+          tileSize,
+          tileCounts[idx] ?? 0,
+          tileBiomass[idx] ?? 0,
+          maxCount,
+          tileOrgs,
+          detail,
+          selectedSpeciesId,
+          animTimeMs,
+        )
+        drawnPlantTiles += 1
+      }
     }
   }
+
+  layers.terrain.addChild(terrainG)
+  layers.plants.addChild(plantsG)
 
   if (speciesSet) {
     const pulse = pulseAlpha(animTimeMs, 0.22, 0.08)
+    const highlightG = new Graphics()
     for (const idx of speciesSet) {
+      if (!tileIndexInBounds(idx, world.width, viewBounds)) continue
       const x = idx % world.width
       const y = Math.floor(idx / world.width)
-      const highlight = new Graphics()
-      highlight.rect(x * tileSize, y * tileSize, tileSize, tileSize)
-      highlight.fill({ color: 0xa855f7, alpha: pulse })
-      highlight.stroke({ width: 1, color: 0xc084fc, alpha: 0.85 })
-      layers.speciesHighlight.addChild(highlight)
+      highlightG.rect(x * tileSize, y * tileSize, tileSize, tileSize)
+      highlightG.fill({ color: 0xa855f7, alpha: pulse })
+      highlightG.stroke({ width: 1, color: 0xc084fc, alpha: 0.85 })
     }
+    layers.speciesHighlight.addChild(highlightG)
   }
 
   const activitySet = new Set(activityTiles)
-  if (activitySet.size > 0) {
+  if (activitySet.size > 0 && (overlay === 'life' || overlay === 'biomass')) {
+    const activityG = new Graphics()
     for (const idx of activitySet) {
-      if (overlay !== 'life' && overlay !== 'biomass') continue
+      if (!tileIndexInBounds(idx, world.width, viewBounds)) continue
       const x = idx % world.width
       const y = Math.floor(idx / world.width)
       const actPulse = pulseAlpha(animTimeMs + idx, 0.45, 0.35)
-      const pulse = new Graphics()
-      pulse.rect(x * tileSize, y * tileSize, tileSize, tileSize)
-      pulse.stroke({ width: 1, color: 0xfbbf24, alpha: actPulse })
-      layers.activity.addChild(pulse)
+      activityG.rect(x * tileSize, y * tileSize, tileSize, tileSize)
+      activityG.stroke({ width: 1, color: 0xfbbf24, alpha: actPulse })
     }
+    layers.activity.addChild(activityG)
   }
 
-  const maxAgentsToDraw = detail === 'close' ? 800 : detail === 'medium' ? 600 : 400
-  const agentsToDraw = agents.length > maxAgentsToDraw ? agents.slice(0, maxAgentsToDraw) : agents
+  const maxAgentsToDraw =
+    detail === 'close'
+      ? MAX_AGENTS_DRAWN_CLOSE
+      : detail === 'medium'
+        ? MAX_AGENTS_DRAWN_MEDIUM
+        : MAX_AGENTS_DRAWN_FAR
 
-  for (const agent of agentsToDraw) {
+  const visibleAgents: MobileAgent[] = []
+  for (const agent of agents) {
+    if (!isTileInBounds(agent.x, agent.y, viewBounds)) continue
+    visibleAgents.push(agent)
+    if (visibleAgents.length >= maxAgentsToDraw) break
+  }
+
+  const agentsG = new Graphics()
+  for (const agent of visibleAgents) {
     const visual = agentVisualStates.get(agent.id)
     const pos = visual ? interpolatedTilePosition(visual) : { x: agent.x, y: agent.y }
     const cx = pos.x * tileSize + tileSize / 2
     const cy = pos.y * tileSize + tileSize / 2
     const isSelectedSpecies = agent.speciesId === selectedSpeciesId
     const moving = visual ? isAgentMoving(visual) : false
+    const useDetail = detail === 'close' && detailedGlyphs < MAX_DETAILED_GLYPHS ? detail : detail === 'close' ? 'medium' : detail
 
-    const ag = new Graphics()
     if (visualMode === 'organic') {
-      drawAgentGlyph(ag, agent, cx, cy, tileSize, detail, isSelectedSpecies, {
+      drawAgentGlyph(agentsG, agent, cx, cy, tileSize, useDetail, isSelectedSpecies, {
         phaseMs: animTimeMs,
         moving,
       })
+      if (useDetail === 'close') detailedGlyphs += 1
     } else {
       let color = 0x4ade80
       if (agent.trophicRole === 'predator') color = 0xf87171
       else if (agent.trophicRole === 'scavenger') color = 0xfbbf24
       const radius = isSelectedSpecies ? tileSize * 0.28 : tileSize * 0.2
-      ag.circle(cx, cy, radius)
-      ag.fill({ color, alpha: isSelectedSpecies ? 0.95 : 0.82 })
+      agentsG.circle(cx, cy, radius)
+      agentsG.fill({ color, alpha: isSelectedSpecies ? 0.95 : 0.82 })
       if (isSelectedSpecies) {
-        ag.stroke({ width: 1, color: 0xffffff, alpha: 0.7 })
+        agentsG.stroke({ width: 1, color: 0xffffff, alpha: 0.7 })
       }
     }
-    layers.agents.addChild(ag)
   }
+  layers.agents.addChild(agentsG)
 
-  if (selectedTile) {
+  if (selectedTile && isTileInBounds(selectedTile.x, selectedTile.y, viewBounds)) {
     const outline = new Graphics()
     outline.rect(
       selectedTile.x * tileSize,
@@ -196,5 +255,12 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): v
     )
     outline.stroke({ width: 2, color: 0x22d3ee, alpha: 0.95 })
     layers.selection.addChild(outline)
+  }
+
+  return {
+    drawnTiles,
+    drawnAgents: visibleAgents.length,
+    drawnPlantTiles,
+    lodLevel: detail,
   }
 }

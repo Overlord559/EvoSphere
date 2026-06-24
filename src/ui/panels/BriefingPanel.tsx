@@ -11,6 +11,7 @@ const SEVERITY_STYLES = {
 export function BriefingPanel() {
   const briefing = useSimulationStore((s) => s.snapshot.briefing)
   const visualMode = useSimulationStore((s) => s.visualMode)
+  const focusTile = useSimulationStore((s) => s.focusTile)
   const deep = briefing.latestDeepTimeSummary
   const selected = briefing.selectedSpecies
   const developments = briefing.latestDevelopments
@@ -70,7 +71,16 @@ export function BriefingPanel() {
                 key={dev.id}
                 className={`rounded border bg-command-bg/60 p-2 font-mono text-xs ${SEVERITY_STYLES[dev.severity]}`}
               >
-                {dev.message}
+                <p>{dev.message}</p>
+                {dev.focusTileX != null && dev.focusTileY != null && (
+                  <button
+                    type="button"
+                    onClick={() => focusTile(dev.focusTileX!, dev.focusTileY!, 3)}
+                    className="mt-1 rounded border border-slate-600 px-1.5 py-0.5 text-[10px] text-slate-400 hover:text-cyan-300"
+                  >
+                    Focus region
+                  </button>
+                )}
               </li>
             ))}
           </ul>

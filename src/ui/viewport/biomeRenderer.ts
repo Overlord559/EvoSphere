@@ -267,6 +267,12 @@ export function drawOrganicTile(
 ): void {
   const px = tile.x * tileSize
   const py = tile.y * tileSize
+
+  if (tile.terrain === 'void') {
+    drawVoidTile(g, px, py, tileSize)
+    return
+  }
+
   const baseColor = colorForTile(tile, overlay, context)
 
   g.rect(px, py, tileSize, tileSize)
@@ -292,6 +298,10 @@ export function drawDebugTile(
 ): void {
   const px = tile.x * tileSize
   const py = tile.y * tileSize
+  if (tile.terrain === 'void') {
+    drawVoidTile(g, px, py, tileSize)
+    return
+  }
   g.rect(px, py, tileSize, tileSize)
   g.fill(colorForTile(tile, overlay, context))
 }
@@ -310,6 +320,14 @@ export function terrainAccentColor(terrain: TerrainType): number {
     swamp: 0x4a6741,
     volcanic: 0x8b2500,
     hydrothermal_vent: 0x5c2d91,
+    void: 0x050810,
   }
   return accents[terrain]
+}
+
+export function drawVoidTile(g: Graphics, px: number, py: number, tileSize: number): void {
+  g.rect(px, py, tileSize, tileSize)
+  g.fill(0x050810)
+  g.circle(px + tileSize * 0.5, py + tileSize * 0.5, tileSize * 0.08)
+  g.fill({ color: 0x1a2030, alpha: 0.35 })
 }

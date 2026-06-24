@@ -45,7 +45,19 @@
 - [x] Deep-time progress UI + runtime in summary
 - [x] ~5× faster +10K yr vs v0.3.1 sync benchmark (exact ticks preserved)
 
-## v0.4.2 Real-Time Living Simulation UX + Time Semantics ✅ (current)
+## v0.4.3 Stability + Bigger Circular World + Zoom Inspection ✅ (current)
+
+- [x] Time-budgeted sim scheduler — ms/frame budget, max ticks/frame, graceful degrade
+- [x] Snapshot throttling — internal tick vs lastSnapshotTick vs renderSnapshotVersion
+- [x] Circular planet mask — activeMask, void terrain, edge falloff, no life outside circle
+- [x] World size presets — 96 / 192 / 256 / 384
+- [x] Viewport culling + LOD — visible tiles only, zoom-tier glyph detail, draw caps
+- [x] Zoom/focus inspection — tile/agent click, species Focus, Inspector/Briefing zoom-to
+- [x] Stability guards — quarantine NaN/invalid entities, population warnings, event caps
+- [x] Performance HUD — FPS, sim ms, drawn counts, LOD, throttle (Debug/Advanced)
+- [x] Pause-while-inspecting + follow-selected-species toggles
+
+## v0.4.2 Real-Time Living Simulation UX + Time Semantics ✅
 
 - [x] Simulated time display (years, eras, generations) — ticks demoted to debug
 - [x] Play-first controls: Normal, Fast Forward, Super Fast, Ultra Fast

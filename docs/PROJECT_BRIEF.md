@@ -22,7 +22,20 @@ Evolution and emergence are fascinating but hard to explore interactively. Most 
 4. **Browser-first** — no install, no backend, IndexedDB for persistence later
 5. **Honest scope** — no fake data, no dead controls, no spectacle without substance
 
-## v0.4.2 Real-Time Living Simulation UX + Time Semantics ✅ (current)
+## v0.4.3 Stability + Bigger Circular World + Zoom Inspection ✅ (current)
+
+Delivered:
+
+- Time-budgeted runtime scheduler (ms budget + max ticks/frame, graceful throttle)
+- Snapshot throttling — `renderSnapshotVersion`, `lastSnapshotTick`, lighter fast-mode snapshots
+- Circular planet mask — `activeMask`, void tiles outside radius, edge climate falloff
+- World size presets — 96 / 192 / 256 / 384 (Standard default 192×192)
+- Viewport culling + LOD — visible-tile rendering, agent/plant draw caps
+- Zoom/focus inspection — tile/agent click, species Focus, Inspector/Briefing zoom-to
+- Stability guards — quarantine invalid entities, population warnings, event caps
+- Performance HUD in Debug/Advanced controls
+
+## v0.4.2 Real-Time Living Simulation UX + Time Semantics ✅
 
 Delivered:
 

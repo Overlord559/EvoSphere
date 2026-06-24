@@ -1,4 +1,5 @@
 import { useSimulationStore } from '../../store/simulationStore'
+import { isTileActive } from '../../simulation/world'
 import { topSpeciesOnTile } from '../../simulation/life/LifeSystem'
 import { agentsOnTile, topAgentSpeciesOnTile } from '../../simulation/agents/AgentSystem'
 import { formatPercent, formatTemperature } from '../../simulation/world'
@@ -15,6 +16,7 @@ export function InspectorPanel() {
   const snapshot = useSimulationStore((s) => s.snapshot)
   const selectSpecies = useSimulationStore((s) => s.selectSpecies)
   const clearSelectedSpecies = useSimulationStore((s) => s.clearSelectedSpecies)
+  const focusTile = useSimulationStore((s) => s.focusTile)
 
   if (!selectedTile) {
     return (
@@ -29,6 +31,8 @@ export function InspectorPanel() {
   )
   const tileAgents = agentsOnTile(snapshot.agents.agents, selectedTile.x, selectedTile.y)
   const idx = selectedTile.y * snapshot.world.width + selectedTile.x
+  const isActive = isTileActive(snapshot.world, selectedTile.x, selectedTile.y)
+  const isVoid = selectedTile.terrain === 'void' || !isActive
   const tileCount = snapshot.life.tileCounts[idx] ?? 0
   const tileBiomass = snapshot.life.tileBiomass[idx] ?? 0
   const agentCount = snapshot.agents.tileAgentCounts[idx] ?? 0
@@ -76,7 +80,8 @@ export function InspectorPanel() {
 
       <dl className="space-y-2 font-mono text-xs">
         <Row label="Position" value={`(${selectedTile.x}, ${selectedTile.y})`} />
-        <Row label="Terrain" value={terrainLabel(selectedTile.terrain)} />
+        <Row label="Status" value={isVoid ? 'Space / void (inactive)' : 'Active planet tile'} />
+        <Row label="Terrain" value={isVoid ? 'void' : terrainLabel(selectedTile.terrain)} />
         <Row label="Elevation" value={formatPercent(selectedTile.elevation)} />
         <Row label="Moisture" value={formatPercent(selectedTile.moisture)} />
         <Row label="Temperature" value={formatTemperature(selectedTile.temperature)} />
@@ -84,9 +89,21 @@ export function InspectorPanel() {
         <Row label="Soil fertility" value={formatPercent(selectedTile.soilFertility)} />
       </dl>
 
+      {!isVoid && (
+        <button
+          type="button"
+          onClick={() => focusTile(selectedTile.x, selectedTile.y, 3.5)}
+          className="rounded border border-cyan-500/30 px-2 py-1 font-mono text-xs text-cyan-300 hover:bg-cyan-500/10"
+        >
+          Zoom to tile
+        </button>
+      )}
+
       <div>
         <p className="mb-2 font-mono text-xs text-slate-500">LIFE ON TILE</p>
-        {tileCount === 0 && agentCount === 0 ? (
+        {isVoid ? (
+          <p className="text-xs text-slate-500">Outside active planet — no life can exist here.</p>
+        ) : tileCount === 0 && agentCount === 0 ? (
           <p className="text-xs text-slate-400">No organisms on this tile.</p>
         ) : (
           <>

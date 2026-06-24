@@ -13,6 +13,7 @@ const TERRAIN_COLORS: Record<TerrainType, number> = {
   swamp: 0x4a6741,
   volcanic: 0x8b2500,
   hydrothermal_vent: 0x5c2d91,
+  void: 0x050810,
 }
 
 function lerpChannel(a: number, b: number, t: number): number {

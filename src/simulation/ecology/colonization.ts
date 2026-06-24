@@ -22,6 +22,7 @@ const WATER_TERRAINS = new Set<TerrainType>([
 ])
 
 export function tileCarryingCapacity(kind: LifeKind, tile: Tile): number {
+  if (tile.terrain === 'void') return 0
   const stress = 1 - environmentalStress(tile, createNeutralGenome())
   let base = 1
   switch (kind) {
@@ -70,6 +71,7 @@ function createNeutralGenome(): Genome {
 }
 
 export function habitatSuitability(kind: LifeKind, tile: Tile, genome: Genome): number {
+  if (tile.terrain === 'void') return 0
   const stress = environmentalStress(tile, genome)
   if (stress > 0.95) return 0
 

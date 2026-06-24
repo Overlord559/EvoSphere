@@ -1,15 +1,22 @@
 import { useEffect, useRef } from 'react'
 import { Application } from 'pixi.js'
 import { useSimulationStore } from '../../store/simulationStore'
-import { getTileAt } from '../../simulation/world'
+import { getTileAtRaw } from '../../simulation/world'
+import { agentsOnTile } from '../../simulation/agents/AgentSystem'
 import { OVERLAY_MODES } from './tileColors'
 import { createRenderLayers, type RenderLayers } from './renderLayers'
 import { renderWorld } from './organismRenderer'
+import {
+  cameraFocusOnTile,
+  computeVisibleTileBounds,
+  type ViewBounds,
+} from './viewportCulling'
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 8
 const BASE_TILE_SIZE = 6
 const DRAG_THRESHOLD = 4
+const INSPECT_ZOOM = 3.5
 
 interface ViewportState {
   panX: number
@@ -22,40 +29,68 @@ export function WorldViewport() {
   const appRef = useRef<Application | null>(null)
   const layersRef = useRef<RenderLayers | null>(null)
   const viewportRef = useRef<ViewportState>({ panX: 0, panY: 0, zoom: 1 })
+  const viewSizeRef = useRef({ width: 800, height: 600 })
   const dragRef = useRef({ active: false, lastX: 0, lastY: 0, moved: false })
+  const lastSnapshotVersionRef = useRef(-1)
 
   const overlayMode = useSimulationStore((s) => s.overlayMode)
   const visualMode = useSimulationStore((s) => s.visualMode)
   const setOverlayMode = useSimulationStore((s) => s.setOverlayMode)
   const setVisualMode = useSimulationStore((s) => s.setVisualMode)
   const selectTile = useSimulationStore((s) => s.selectTile)
+  const selectSpecies = useSimulationStore((s) => s.selectSpecies)
   const selectedTile = useSimulationStore((s) => s.selectedTile)
   const snapshot = useSimulationStore((s) => s.snapshot)
+  const renderSnapshotVersion = useSimulationStore((s) => s.snapshot.renderSnapshotVersion)
   const recentActivityTiles = useSimulationStore((s) => s.recentActivityTiles)
   const selectedSpeciesId = useSimulationStore((s) => s.selectedSpeciesId)
   const agentVisualStates = useSimulationStore((s) => s.agentVisualStates)
   const animTimeMs = useSimulationStore((s) => s.animTimeMs)
   const advanceAnimation = useSimulationStore((s) => s.advanceAnimation)
   const runtime = useSimulationStore((s) => s.runtime)
+  const cameraFocusRequest = useSimulationStore((s) => s.cameraFocusRequest)
+  const clearCameraFocusRequest = useSimulationStore((s) => s.clearCameraFocusRequest)
+  const updatePerformanceStats = useSimulationStore((s) => s.updatePerformanceStats)
+  const focusTile = useSimulationStore((s) => s.focusTile)
 
   const world = snapshot.world
-  const { tileCounts, tileBiomass, speciesOccupancy, organisms } = snapshot.life
-  const agents = snapshot.agents.agents
   const speciesTileIndices = selectedSpeciesId
-    ? (speciesOccupancy[selectedSpeciesId]?.tileIndices ?? null)
+    ? (snapshot.life.speciesOccupancy[selectedSpeciesId]?.tileIndices ?? null)
     : null
 
   const redrawRef = useRef<() => void>(() => {})
 
-  const redraw = () => {
+  const redraw = (force = false) => {
     const layers = layersRef.current
-    if (!layers) return
+    const host = containerRef.current
+    if (!layers || !host) return
+
     const state = useSimulationStore.getState()
-    renderWorld(layers, {
+    const versionChanged = state.snapshot.renderSnapshotVersion !== lastSnapshotVersionRef.current
+    if (!force && !versionChanged && state.animTimeMs === animTimeMs) {
+      return
+    }
+    lastSnapshotVersionRef.current = state.snapshot.renderSnapshotVersion
+
+    const vp = viewportRef.current
+    const viewBounds: ViewBounds = computeVisibleTileBounds(
+      state.snapshot.world,
+      {
+        panX: vp.panX,
+        panY: vp.panY,
+        zoom: vp.zoom,
+        viewWidth: viewSizeRef.current.width,
+        viewHeight: viewSizeRef.current.height,
+      },
+      BASE_TILE_SIZE,
+      3,
+    )
+
+    const stats = renderWorld(layers, {
       world: state.snapshot.world,
       overlay: state.overlayMode,
       tileSize: BASE_TILE_SIZE,
-      zoom: viewportRef.current.zoom,
+      zoom: vp.zoom,
       visualMode: state.visualMode,
       tileCounts: state.snapshot.life.tileCounts,
       tileBiomass: state.snapshot.life.tileBiomass,
@@ -70,10 +105,13 @@ export function WorldViewport() {
         : null,
       selectedSpeciesId: state.selectedSpeciesId,
       selectedTile: state.selectedTile,
+      viewBounds,
     })
+
+    updatePerformanceStats(stats)
   }
 
-  redrawRef.current = redraw
+  redrawRef.current = () => redraw(true)
 
   useEffect(() => {
     const host = containerRef.current
@@ -110,6 +148,7 @@ export function WorldViewport() {
       const resize = () => {
         if (!app || destroyed) return
         app.renderer.resize(host.clientWidth, host.clientHeight)
+        viewSizeRef.current = { width: host.clientWidth, height: host.clientHeight }
       }
       resize()
       const observer = new ResizeObserver(resize)
@@ -168,8 +207,14 @@ export function WorldViewport() {
         const localY = (e.clientY - rect.top - vp.panY) / vp.zoom
         const tx = Math.floor(localX / BASE_TILE_SIZE)
         const ty = Math.floor(localY / BASE_TILE_SIZE)
-        const tile = getTileAt(currentWorld, tx, ty)
-        selectTile(tile ?? null)
+
+        const tileAgents = agentsOnTile(state.snapshot.agents.agents, tx, ty)
+        if (tileAgents.length > 0) {
+          selectSpecies(tileAgents[0].speciesId)
+        }
+
+        const rawTile = getTileAtRaw(currentWorld, tx, ty)
+        selectTile(rawTile ?? null)
       }
 
       app.canvas.addEventListener('wheel', onWheel, { passive: false })
@@ -206,22 +251,39 @@ export function WorldViewport() {
       }
       host.innerHTML = ''
     }
-  }, [world.id, selectTile, advanceAnimation])
+  }, [world.id, selectTile, selectSpecies, advanceAnimation, updatePerformanceStats])
+
+  useEffect(() => {
+    if (!cameraFocusRequest || !layersRef.current || !containerRef.current) return
+    const vp = viewportRef.current
+    const host = containerRef.current
+    const zoom = cameraFocusRequest.zoom ?? INSPECT_ZOOM
+    vp.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom))
+    const focus = cameraFocusOnTile(
+      cameraFocusRequest.tileX,
+      cameraFocusRequest.tileY,
+      BASE_TILE_SIZE,
+      host.clientWidth,
+      host.clientHeight,
+      vp.zoom,
+    )
+    vp.panX = focus.panX
+    vp.panY = focus.panY
+    layersRef.current.root.position.set(vp.panX, vp.panY)
+    layersRef.current.root.scale.set(vp.zoom)
+    clearCameraFocusRequest()
+    redrawRef.current()
+  }, [cameraFocusRequest, clearCameraFocusRequest])
 
   useEffect(() => {
     redrawRef.current()
   }, [
-    world,
+    renderSnapshotVersion,
     overlayMode,
     visualMode,
     selectedTile,
-    tileCounts,
-    tileBiomass,
-    snapshot.tick,
     recentActivityTiles,
     speciesTileIndices,
-    agents,
-    organisms,
     selectedSpeciesId,
     agentVisualStates,
     animTimeMs,
@@ -273,9 +335,23 @@ export function WorldViewport() {
         >
           Debug
         </button>
+        {selectedTile && (
+          <button
+            type="button"
+            onClick={() => focusTile(selectedTile.x, selectedTile.y, INSPECT_ZOOM)}
+            className="rounded border border-cyan-500/30 px-2 py-0.5 font-mono text-[10px] text-cyan-300 hover:bg-cyan-500/10"
+          >
+            Zoom to tile
+          </button>
+        )}
         {runtime.isRunning && (
           <span className="ml-auto rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] text-emerald-400">
             LIVE
+          </span>
+        )}
+        {runtime.throttleStatus !== 'ok' && (
+          <span className="rounded bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] text-amber-300">
+            {runtime.throttleMessage ?? runtime.throttleStatus}
           </span>
         )}
       </div>
@@ -285,7 +361,7 @@ export function WorldViewport() {
         aria-label="World viewport"
       />
       <p className="border-t border-command-border px-3 py-2 font-mono text-xs text-slate-500">
-        Living world — scroll to zoom · drag to pan · click to inspect · press Play to watch evolution unfold
+        Circular planet — scroll to zoom · drag to pan · click tile or agent to inspect · Play to watch evolution
       </p>
     </div>
   )
@@ -297,10 +373,10 @@ function centerWorld(
   host: HTMLDivElement,
   vp: ViewportState,
 ): void {
-  const mapW = world.width * BASE_TILE_SIZE
-  const mapH = world.height * BASE_TILE_SIZE
-  vp.panX = (host.clientWidth - mapW * vp.zoom) / 2
-  vp.panY = (host.clientHeight - mapH * vp.zoom) / 2
+  const cx = world.planetCenterX * BASE_TILE_SIZE + BASE_TILE_SIZE / 2
+  const cy = world.planetCenterY * BASE_TILE_SIZE + BASE_TILE_SIZE / 2
+  vp.panX = host.clientWidth / 2 - cx * vp.zoom
+  vp.panY = host.clientHeight / 2 - cy * vp.zoom
   container.position.set(vp.panX, vp.panY)
   container.scale.set(vp.zoom)
 }

@@ -53,7 +53,8 @@ export function WorldPanel() {
         <Row label="Era" value={briefing.era} />
         <Row label="Est. generations" value={`~${briefing.estimatedGenerations}`} />
         <Row label="Active seed" value={world.seed} />
-        <Row label="Dimensions" value={`${world.width} × ${world.height}`} />
+        <Row label="Dimensions" value={`${world.width} × ${world.height} (planet r≈${world.planetRadius.toFixed(0)})`} />
+        <Row label="World preset" value={settings.worldSizePreset} />
         {visualMode === 'debug' && (
           <Row label="Internal tick" value={String(snapshot.tick)} />
         )}

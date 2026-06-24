@@ -22,6 +22,11 @@ import {
 } from '../ecology/energy'
 import { mutateGenome, shouldSpeciate } from '../genetics/mutation'
 import { getTileAt } from '../world/generateWorld'
+import { isTileActive } from '../world/planetMask'
+import {
+  clampOrganismVitals,
+  sanitizeOrganism,
+} from '../engine/stabilityGuards'
 import { createFounderOrganism, createOrganism } from './createLife'
 import { SpeciesRegistry, resetSpeciesCounter } from '../species/speciesRegistry'
 import { buildSpeciesOccupancy } from '../species/speciesOccupancy'
@@ -69,6 +74,7 @@ export class LifeSystem {
 
     for (const tile of world.tiles) {
       if (seeded >= 48) break
+      if (!isTileActive(world, tile.x, tile.y)) continue
 
       if (tile.terrain === 'hydrothermal_vent') {
         this.spawnFounder('ChemosyntheticMicrobe', tile.x, tile.y, world, 0)
@@ -78,6 +84,7 @@ export class LifeSystem {
 
     for (const tile of world.tiles) {
       if (seeded >= 48) break
+      if (!isTileActive(world, tile.x, tile.y)) continue
       if (
         (tile.terrain === 'coast' || tile.terrain === 'ocean' || tile.terrain === 'river') &&
         tile.water > 0.4 &&
@@ -90,6 +97,7 @@ export class LifeSystem {
 
     for (const tile of world.tiles) {
       if (seeded >= 48) break
+      if (!isTileActive(world, tile.x, tile.y)) continue
       if (
         (tile.terrain === 'ocean' || tile.terrain === 'coast' || tile.terrain === 'river') &&
         tile.water > 0.5 &&
@@ -102,6 +110,7 @@ export class LifeSystem {
 
     for (const tile of world.tiles) {
       if (seeded >= 64) break
+      if (!isTileActive(world, tile.x, tile.y)) continue
       if (
         (tile.terrain === 'grassland' || tile.terrain === 'forest' || tile.terrain === 'swamp') &&
         tile.soilFertility > 0.35 &&
@@ -239,6 +248,25 @@ export class LifeSystem {
       this.tick(world, t, NOOP_EMIT, true)
     }
     return t
+  }
+
+  quarantineInvalid(world: World): number {
+    let removed = 0
+    const next: LifeOrganism[] = []
+    for (const organism of this.organisms) {
+      const reason = sanitizeOrganism(organism, world)
+      if (reason) {
+        removed += 1
+        continue
+      }
+      clampOrganismVitals(organism)
+      next.push(organism)
+    }
+    if (removed > 0) {
+      this.organisms = next
+      this.rebuildTileIndex(world)
+    }
+    return removed
   }
 
   getSnapshot(
@@ -395,6 +423,7 @@ export class LifeSystem {
   }
 
   private spawnFounder(kind: LifeKind, x: number, y: number, world: World, tick: number): void {
+    if (!isTileActive(world, x, y)) return
     if (this.countAtTile(x, y, world) >= MAX_ORGANISMS_PER_TILE) return
     if (this.organisms.length >= MAX_TOTAL_ORGANISMS) return
 

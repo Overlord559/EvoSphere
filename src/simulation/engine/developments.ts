@@ -68,12 +68,16 @@ export function buildLatestDevelopments(
   if (grazerCenter && grazerCenter.count >= 3) {
     const region = regionLabel(grazerCenter.x, grazerCenter.y, world.width, world.height)
     push(`Grazers are active across ${region} grasslands (${grazerCenter.count} visible).`, 'info')
+    out[out.length - 1].focusTileX = Math.round(grazerCenter.x)
+    out[out.length - 1].focusTileY = Math.round(grazerCenter.y)
   }
 
   const predatorCenter = agentCentroid(agents, (r) => r === 'predator')
   if (predatorCenter && predatorCenter.count >= 2) {
     const region = regionLabel(predatorCenter.x, predatorCenter.y, world.width, world.height)
     push(`Predators are concentrating near the ${region} territories.`, 'warning')
+    out[out.length - 1].focusTileX = Math.round(predatorCenter.x)
+    out[out.length - 1].focusTileY = Math.round(predatorCenter.y)
   }
 
   const bloomEvent = events.find((e) => e.type === 'life.bloom')
@@ -88,6 +92,8 @@ export function buildLatestDevelopments(
     if (c) {
       const region = regionLabel(c.x, c.y, world.width, world.height)
       push(`Algae biomass is building along ${region} aquatic zones.`, 'positive')
+      out[out.length - 1].focusTileX = Math.round(c.x)
+      out[out.length - 1].focusTileY = Math.round(c.y)
     }
   }
 
