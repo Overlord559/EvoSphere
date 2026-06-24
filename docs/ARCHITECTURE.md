@@ -92,7 +92,32 @@ Deep-time buttons convert years → ticks via `yearsToTicks()`. Summaries report
 - Deep time uses chunked stepping (`DEEP_TIME_CHUNK_SIZE = 250`) to avoid browser lockups
 - UI calls store actions only; viewport is read-only
 
-## Life System (v0.3.1)
+## SimEngine (v0.3.2)
+
+- `stepDeepTimeBatch(n)` — fast batched ticks without periodic events or full snapshot assembly
+- `startDeepTimeCapture` / `finalizeDeepTime` — async-friendly deep-time with runtime seconds + selected species delta
+- `getSnapshotWithSelectedSpecies(id)` — briefing includes selected-species block
+- Deep-time chunk size: **5000 ticks** internal; UI sync every 2 chunks
+
+## Species selection (v0.3.2)
+
+- `selectedSpeciesId` lives in Zustand only — SimEngine unchanged
+- `LifeSnapshot.speciesOccupancy` — precomputed per species: tile indices, avg stats, dominant terrain
+- Viewport draws violet overlay only on occupied tile indices (O(tiles occupied), not O(all tiles × organisms))
+
+## Deep-time performance (v0.3.2)
+
+| Optimization | Effect |
+|--------------|--------|
+| O(1) `liveTileCounts` vs O(n) filter per reproduction check | Major tick speedup |
+| Skip population events + species history during batch suppress | Less per-tick overhead |
+| In-place world.tick mutation | Avoid object spread per tick |
+| Lightweight snapshot during batch (`includeOrganisms: false`) | Less allocation in hot path |
+| 5K tick internal chunks | Fewer boundary overheads |
+
+Benchmark (Node, seed `evosphere-prime`): +1K yr ~16s · +10K yr ~132s (vs ~704s v0.3.1)
+
+## Life System (v0.3.2)
 
 ```
 LifeSystem
@@ -122,7 +147,7 @@ Modules:
 | `simulation/ecology/energy.ts` | Energy gain and environmental stress |
 | `simulation/ecology/colonization.ts` | Habitat suitability and carrying capacity |
 | `simulation/species/speciesRegistry.ts` | Species tracking + founder lineages |
-| `simulation/species/speciationConfig.ts` | Configurable speciation thresholds |
+| `simulation/species/speciesOccupancy.ts` | Occupancy index + threat heuristics |
 
 Population controls: max 4 organisms/tile, max 5000 total.
 
@@ -134,7 +159,7 @@ Population controls: max 4 organisms/tile, max 5000 total.
 - Never mutates simulation state
 - Supports pan, zoom, tile click → `selectTile`
 - Climate overlays plus **life** and **biomass** density overlays with gamma-scaled visibility
-- Highlights recent activity tiles (blooms/colonization) with amber outline
+- Highlights **selected species** tiles with violet fill + outline (`speciesOccupancy.tileIndices`)
 - Destroys Pixi app on unmount to avoid duplicate canvases
 
 ## UI Panels
@@ -142,10 +167,10 @@ Population controls: max 4 organisms/tile, max 5000 total.
 | Panel | Content |
 |-------|---------|
 | World | Seed, runtime controls, deep time, world stats |
-| Species | Alive species sorted by population |
+| Species | Alive species, click to select/focus, occupancy summary |
 | Events | Throttled milestone log with category colors |
-| Inspector | Tile climate + top species on tile |
-| Briefing | Era, dominant species, threats, deep-time recap |
+| Inspector | Tile climate + clickable top species |
+| Briefing | World or selected-species briefing + deep-time recap |
 | Roadmap | Phase plan |
 
 ## Why agents start in v0.4

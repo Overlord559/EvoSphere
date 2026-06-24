@@ -59,6 +59,17 @@ export interface TileLifeData {
   organisms: LifeOrganism[]
 }
 
+export interface SpeciesOccupancy {
+  speciesId: string
+  /** Tile indices (y * width + x) where this species has organisms. */
+  tileIndices: number[]
+  occupiedTileCount: number
+  avgGeneration: number
+  avgEnergy: number
+  avgHealth: number
+  dominantTerrain: import('./simulation').TerrainType | null
+}
+
 export interface LifeSnapshot {
   organisms: LifeOrganism[]
   species: SpeciesRecord[]
@@ -68,6 +79,8 @@ export interface LifeSnapshot {
   tileCounts: number[]
   /** Per-tile biomass sum. */
   tileBiomass: number[]
+  /** Precomputed occupancy per alive species id. */
+  speciesOccupancy: Record<string, SpeciesOccupancy>
 }
 
 export const MAX_ORGANISMS_PER_TILE = 4

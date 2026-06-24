@@ -5,7 +5,10 @@ import { lifeKindLabel, terrainLabel } from '../viewport/tileColors'
 
 export function InspectorPanel() {
   const selectedTile = useSimulationStore((s) => s.selectedTile)
+  const selectedSpeciesId = useSimulationStore((s) => s.selectedSpeciesId)
   const snapshot = useSimulationStore((s) => s.snapshot)
+  const selectSpecies = useSimulationStore((s) => s.selectSpecies)
+  const clearSelectedSpecies = useSimulationStore((s) => s.clearSelectedSpecies)
 
   if (!selectedTile) {
     return (
@@ -26,6 +29,16 @@ export function InspectorPanel() {
 
   return (
     <div className="space-y-4 text-sm text-slate-300">
+      {selectedSpeciesId && (
+        <button
+          type="button"
+          onClick={clearSelectedSpecies}
+          className="rounded border border-command-border px-2 py-1 font-mono text-xs text-slate-400 hover:text-slate-200"
+        >
+          Clear selected species
+        </button>
+      )}
+
       <dl className="space-y-2 font-mono text-xs">
         <Row label="Position" value={`(${selectedTile.x}, ${selectedTile.y})`} />
         <Row label="Terrain" value={terrainLabel(selectedTile.terrain)} />
@@ -49,21 +62,41 @@ export function InspectorPanel() {
 
             {topSpecies.length > 0 && (
               <div className="mb-2">
-                <p className="mb-1 font-mono text-[10px] text-slate-500">TOP SPECIES</p>
-                <ul className="space-y-1 font-mono text-xs text-slate-400">
-                  {topSpecies.slice(0, 4).map(({ speciesId, kind, count }) => (
-                    <li key={speciesId} className="flex justify-between gap-2">
-                      <span>{speciesNames.get(speciesId) ?? lifeKindLabel(kind)}</span>
-                      <span>{count}</span>
-                    </li>
-                  ))}
+                <p className="mb-1 font-mono text-[10px] text-slate-500">TOP SPECIES — click to select</p>
+                <ul className="space-y-1 font-mono text-xs">
+                  {topSpecies.slice(0, 4).map(({ speciesId, kind, count }) => {
+                    const isSelected = speciesId === selectedSpeciesId
+                    return (
+                      <li key={speciesId}>
+                        <button
+                          type="button"
+                          onClick={() => selectSpecies(speciesId)}
+                          className={`flex w-full justify-between gap-2 rounded border px-2 py-1 text-left ${
+                            isSelected
+                              ? 'border-violet-400/50 bg-violet-500/15 text-violet-200'
+                              : 'border-command-border/60 text-slate-400 hover:border-command-accent/30'
+                          }`}
+                        >
+                          <span>{speciesNames.get(speciesId) ?? lifeKindLabel(kind)}</span>
+                          <span>{count}</span>
+                        </button>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             )}
 
             <ul className="max-h-36 space-y-1 overflow-y-auto font-mono text-xs text-slate-400">
               {tileLife.map((organism) => (
-                <li key={organism.id} className="rounded border border-command-border/60 px-2 py-1">
+                <li
+                  key={organism.id}
+                  className={`rounded border px-2 py-1 ${
+                    organism.speciesId === selectedSpeciesId
+                      ? 'border-violet-400/40 bg-violet-500/10'
+                      : 'border-command-border/60'
+                  }`}
+                >
                   {lifeKindLabel(organism.kind)} · E {organism.energy.toFixed(2)} · H{' '}
                   {organism.health.toFixed(2)} · age {organism.age}
                 </li>

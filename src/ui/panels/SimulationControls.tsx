@@ -11,15 +11,16 @@ const SPEEDS: { id: SimSpeed; label: string }[] = [
 ]
 
 const DEEP_TIME_JUMPS = [
-  { years: 1_000, label: '+1K yr' },
-  { years: 10_000, label: '+10K yr' },
-  { years: 100_000, label: '+100K yr' },
-  { years: 1_000_000, label: '+1M yr' },
+  { years: 1_000, label: '+1K yr', hint: 'fast' },
+  { years: 10_000, label: '+10K yr', hint: '~30–90s' },
+  { years: 100_000, label: '+100K yr', hint: 'slow' },
+  { years: 1_000_000, label: '+1M yr', hint: 'very slow' },
 ]
 
 export function SimulationControls() {
   const runtime = useSimulationStore((s) => s.runtime)
   const deepTimeRunning = useSimulationStore((s) => s.deepTimeRunning)
+  const deepTimeProgress = useSimulationStore((s) => s.deepTimeProgress)
   const tick = useSimulationStore((s) => s.snapshot.tick)
   const play = useSimulationStore((s) => s.play)
   const pause = useSimulationStore((s) => s.pause)
@@ -30,6 +31,9 @@ export function SimulationControls() {
   const newWorldRandomSeed = useSimulationStore((s) => s.newWorldRandomSeed)
 
   const isRunning = runtime.isRunning
+  const progressPct = deepTimeProgress
+    ? Math.min(100, Math.round((deepTimeProgress.completedTicks / deepTimeProgress.totalTicks) * 100))
+    : 0
 
   return (
     <div className="space-y-3">
@@ -45,10 +49,25 @@ export function SimulationControls() {
         )}
         {deepTimeRunning && (
           <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] text-amber-300">
-            DEEP TIME…
+            DEEP TIME {progressPct}%
           </span>
         )}
       </div>
+
+      {deepTimeProgress && (
+        <div className="space-y-1">
+          <div className="h-1.5 overflow-hidden rounded bg-slate-800">
+            <div
+              className="h-full bg-amber-400 transition-all duration-150"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          <p className="font-mono text-[10px] text-slate-500">
+            {formatSimYears(deepTimeProgress.startYear)} → {formatSimYears(deepTimeProgress.targetYear)} ·{' '}
+            {(deepTimeProgress.elapsedMs / 1000).toFixed(1)}s elapsed · exact tick simulation
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {isRunning ? (
@@ -89,7 +108,8 @@ export function SimulationControls() {
               type="button"
               onClick={() => setSpeed(id)}
               aria-pressed={runtime.speed === id}
-              className={`rounded px-2 py-1 font-mono text-xs transition-colors ${
+              disabled={deepTimeRunning}
+              className={`rounded px-2 py-1 font-mono text-xs transition-colors disabled:opacity-40 ${
                 runtime.speed === id
                   ? 'bg-command-accent/15 text-command-accent'
                   : 'border border-command-border text-slate-400 hover:text-slate-200'
@@ -102,17 +122,19 @@ export function SimulationControls() {
       </div>
 
       <div>
-        <p className="mb-1.5 font-mono text-xs text-slate-500">DEEP TIME</p>
+        <p className="mb-1.5 font-mono text-xs text-slate-500">DEEP TIME (exact ticks, chunked)</p>
         <div className="flex flex-wrap gap-1">
-          {DEEP_TIME_JUMPS.map(({ years, label }) => (
+          {DEEP_TIME_JUMPS.map(({ years, label, hint }) => (
             <button
               key={years}
               type="button"
               onClick={() => deepTimeYears(years)}
               disabled={isRunning || deepTimeRunning}
+              title={`${hint} — deterministic exact simulation`}
               className="rounded border border-amber-500/30 px-2 py-1 font-mono text-xs text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
             >
               {label}
+              <span className="ml-1 text-[10px] text-amber-500/70">{hint}</span>
             </button>
           ))}
         </div>

@@ -24,6 +24,14 @@ export interface DeepTimeSummary {
   colonizedTilesAfter: number
   colonizedTilesDelta: number
   changedTilesCount: number
+  elapsedSimYears: number
+  runtimeSeconds: number
+  /** Population delta for species selected at deep-time start (if any). */
+  selectedSpeciesId: string | null
+  selectedSpeciesName: string | null
+  selectedSpeciesPopBefore: number | null
+  selectedSpeciesPopAfter: number | null
+  selectedSpeciesPopDelta: number | null
 }
 
 export interface BriefingSnapshot {
@@ -39,6 +47,23 @@ export interface BriefingSnapshot {
   mostThreatenedSpecies: string | null
   latestMajorEvent: string | null
   latestDeepTimeSummary: DeepTimeSummary | null
+  /** Populated when a species is selected in UI. */
+  selectedSpecies: SelectedSpeciesBriefing | null
+}
+
+export interface SelectedSpeciesBriefing {
+  speciesId: string
+  name: string
+  kind: LifeKind
+  population: number
+  biomass: number
+  occupiedTiles: number
+  avgGeneration: number
+  avgEnergy: number
+  avgHealth: number
+  dominantTerrain: string | null
+  trend: 'growing' | 'stable' | 'threatened' | 'extinct'
+  popDelta: number
 }
 
 export interface SimulationSnapshot {
@@ -78,4 +103,13 @@ export type SimSpeed = 1 | 10 | 100 | 1000 | 'deep'
 export interface RuntimeState {
   isRunning: boolean
   speed: SimSpeed
+}
+
+export interface DeepTimeProgress {
+  completedTicks: number
+  totalTicks: number
+  startYear: number
+  targetYear: number
+  elapsedMs: number
+  mode: 'exact' | 'accelerated'
 }

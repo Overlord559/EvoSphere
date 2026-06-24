@@ -1,5 +1,6 @@
-import type { LifeKind, LifeSnapshot, SpeciesRecord } from '../../types/life'
-import type { BriefingSnapshot, DeepTimeSummary, EventLogEntry } from '../../types/runtime'
+import type { LifeSnapshot, SpeciesRecord } from '../../types/life'
+import type { BriefingSnapshot, DeepTimeSummary, EventLogEntry, SelectedSpeciesBriefing } from '../../types/runtime'
+import { threatStatus } from '../species/speciesOccupancy'
 import {
   eraForTick,
   tickToGenerations,
@@ -12,6 +13,7 @@ export function buildBriefing(
   events: EventLogEntry[],
   lastDeepTimeSummary: DeepTimeSummary | null,
   speciesPopHistory: Map<string, number>,
+  selectedSpeciesId: string | null,
 ): BriefingSnapshot {
   const aliveSpecies = life.species.filter((s) => s.population > 0)
   const dominant = aliveSpecies[0] ?? null
@@ -35,6 +37,10 @@ export function buildBriefing(
   ])
   const latestMajor = events.find((e) => majorTypes.has(e.type))
 
+  const selectedSpecies = selectedSpeciesId
+    ? buildSelectedSpeciesBriefing(selectedSpeciesId, life, speciesPopHistory)
+    : null
+
   return {
     simulatedYear: tickToYears(tick),
     estimatedGenerations: tickToGenerations(tick),
@@ -48,6 +54,34 @@ export function buildBriefing(
     mostThreatenedSpecies: mostThreatened?.name ?? null,
     latestMajorEvent: latestMajor?.message ?? null,
     latestDeepTimeSummary: lastDeepTimeSummary,
+    selectedSpecies,
+  }
+}
+
+function buildSelectedSpeciesBriefing(
+  speciesId: string,
+  life: LifeSnapshot,
+  speciesPopHistory: Map<string, number>,
+): SelectedSpeciesBriefing | null {
+  const record = life.species.find((s) => s.id === speciesId)
+  if (!record || record.population <= 0) return null
+
+  const occupancy = life.speciesOccupancy[speciesId]
+  const prevPop = speciesPopHistory.get(speciesId) ?? record.population
+
+  return {
+    speciesId,
+    name: record.name,
+    kind: record.kind,
+    population: record.population,
+    biomass: record.totalBiomass,
+    occupiedTiles: occupancy?.occupiedTileCount ?? 0,
+    avgGeneration: occupancy?.avgGeneration ?? record.generation,
+    avgEnergy: occupancy?.avgEnergy ?? 0,
+    avgHealth: occupancy?.avgHealth ?? 0,
+    dominantTerrain: occupancy?.dominantTerrain?.replace(/_/g, ' ') ?? null,
+    trend: threatStatus(record, prevPop),
+    popDelta: record.population - prevPop,
   }
 }
 
@@ -89,19 +123,4 @@ function findMostThreatened(
   return worst
 }
 
-export function dominantKindFromLife(life: LifeSnapshot): LifeKind | null {
-  const kindCounts = new Map<LifeKind, number>()
-  for (const species of life.species) {
-    if (species.population <= 0) continue
-    kindCounts.set(species.kind, (kindCounts.get(species.kind) ?? 0) + species.population)
-  }
-  let best: LifeKind | null = null
-  let bestCount = 0
-  for (const [kind, count] of kindCounts) {
-    if (count > bestCount) {
-      bestCount = count
-      best = kind
-    }
-  }
-  return best
-}
+export { buildSelectedSpeciesBriefing }

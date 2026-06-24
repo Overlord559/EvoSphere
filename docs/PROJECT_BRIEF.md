@@ -22,7 +22,19 @@ Evolution and emergence are fascinating but hard to explore interactively. Most 
 4. **Browser-first** — no install, no backend, IndexedDB for persistence later
 5. **Honest scope** — no fake data, no dead controls, no spectacle without substance
 
-## v0.3.1 Runtime + Observability ✅ (current)
+## v0.3.2 Species Highlight + Performance ✅ (current)
+
+Delivered:
+
+- Species selection state (`selectedSpeciesId`) with select / focus / clear
+- Map highlight for all tiles occupied by selected species
+- Species panel summary (population, biomass, tiles, avg stats, habitat, threat)
+- Inspector + Briefing cross-link for selected species
+- Precomputed species occupancy index in life snapshot
+- Deep-time performance: batched 5K ticks, O(1) tile counts, progress UI
+- Deep-time summary includes runtime seconds + selected species delta
+
+## v0.3.1 Runtime + Observability ✅
 
 Delivered:
 

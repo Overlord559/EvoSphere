@@ -2,27 +2,24 @@
 
 Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, and real-time Pixi viewport rendering.
 
-**Current phase:** v0.3.1 runtime + observability
+**Current phase:** v0.3.2 species highlight + deep-time performance
 
 ## Status
 
-v0.3.1 adds simulation runtime controls, deep-time fast-forward, and observability on top of v0.3 life systems:
+v0.3.2 adds species-level map observability and deep-time performance improvements:
 
-- **Run / Pause / Step** — 1, 10, 100, 1,000 tick steps with reliable engine-owned loop
-- **Speed modes** — 1×, 10×, 100×, 1,000× continuous run
-- **Deep time** — +1K / +10K / +100K / +1M year jumps with summary events
-- **World briefing** — era, dominant species, threats, blooms, deep-time recap
-- **Species clustering fix** — founder lineages share species; speciation requires divergence + generations + population
-- Life and biomass overlays with activity highlights
+- **Species selection** — click species in panel or inspector; map highlights all occupied tiles (violet glow)
+- **Species summary** — population, biomass, occupied tiles, avg generation/energy/health, habitat, threat status
+- **Briefing integration** — selected-species briefing when a species is focused
+- **Deep-time performance** — batched 5K-tick chunks, O(1) tile counts, throttled snapshot rebuilds during batch runs
+- **Deep-time progress** — progress bar, elapsed seconds, honest slow labels on +100K/+1M buttons
+- **Enhanced deep-time summary** — runtime duration, selected species delta, major blooms/die-offs
 
-v0.3 foundation:
+v0.3.1 foundation:
 
-- Microbial energy loop (photosynthetic and chemosynthetic)
-- Algae and primitive plant colonization
-- Genome inheritance with mutation and speciation
-- Live species counts, biomass, and biological event log
+- Run/pause/step, speed modes, deep-time fast-forward, world briefing, species clustering fix
 
-Animals, predators, tools, culture, and civilization remain deferred to v0.4+.
+Animals, predators, tools, culture, and civilization remain deferred to v0.4.
 
 ## Stack
 
@@ -42,13 +39,19 @@ npm run build
 npm run lint
 ```
 
+## Deep-time performance (approximate, seed `evosphere-prime`, 96×96)
+
+| Jump | Typical runtime |
+|------|-----------------|
+| +1K yr | ~15–20s |
+| +10K yr | ~2–3 min |
+| +100K / +1M | minutes — exact tick simulation, UI stays responsive via chunked async stepping |
+
 ## Simulation time
 
-- **Tick** — atomic simulation step (life energy, reproduction, death)
-- **Generation estimate** — ~25 ticks per generation (approximate)
-- **Simulated years** — 10 ticks ≈ 1 year (tunable abstraction for deep-time jumps)
-
-Same world seed produces the same founder placement. Life tick RNG uses `forkRng(seed, 'life-tick-N')`.
+- **Tick** — atomic simulation step
+- **Generation estimate** — ~25 ticks per generation
+- **Simulated years** — 10 ticks ≈ 1 year
 
 ## Documentation
 

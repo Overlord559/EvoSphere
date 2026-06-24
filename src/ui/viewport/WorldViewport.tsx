@@ -43,10 +43,15 @@ function drawWorld(
   tileCounts: number[],
   tileBiomass: number[],
   activityTiles: number[],
+  speciesTileIndices: number[] | null,
 ): void {
   container.removeChildren()
 
   const baseContext = buildColorContext(overlay, tileCounts, tileBiomass, activityTiles)
+  const speciesSet =
+    speciesTileIndices && speciesTileIndices.length > 0
+      ? new Set(speciesTileIndices)
+      : null
 
   for (const tile of world.tiles) {
     const idx = tile.y * world.width + tile.x
@@ -64,6 +69,18 @@ function drawWorld(
       pulse.rect(tile.x * tileSize, tile.y * tileSize, tileSize, tileSize)
       pulse.stroke({ width: 1, color: 0xfbbf24, alpha: 0.75 })
       container.addChild(pulse)
+    }
+  }
+
+  if (speciesSet) {
+    for (const idx of speciesSet) {
+      const x = idx % world.width
+      const y = Math.floor(idx / world.width)
+      const highlight = new Graphics()
+      highlight.rect(x * tileSize, y * tileSize, tileSize, tileSize)
+      highlight.fill({ color: 0xa855f7, alpha: 0.28 })
+      highlight.stroke({ width: 1, color: 0xc084fc, alpha: 0.9 })
+      container.addChild(highlight)
     }
   }
 
@@ -93,9 +110,13 @@ export function WorldViewport() {
   const selectedTile = useSimulationStore((s) => s.selectedTile)
   const snapshot = useSimulationStore((s) => s.snapshot)
   const recentActivityTiles = useSimulationStore((s) => s.recentActivityTiles)
+  const selectedSpeciesId = useSimulationStore((s) => s.selectedSpeciesId)
 
   const world = snapshot.world
-  const { tileCounts, tileBiomass } = snapshot.life
+  const { tileCounts, tileBiomass, speciesOccupancy } = snapshot.life
+  const speciesTileIndices = selectedSpeciesId
+    ? (speciesOccupancy[selectedSpeciesId]?.tileIndices ?? null)
+    : null
 
   useEffect(() => {
     const host = containerRef.current
@@ -196,6 +217,9 @@ export function WorldViewport() {
         current.snapshot.life.tileCounts,
         current.snapshot.life.tileBiomass,
         current.recentActivityTiles,
+        current.selectedSpeciesId
+          ? (current.snapshot.life.speciesOccupancy[current.selectedSpeciesId]?.tileIndices ?? null)
+          : null,
       )
       centerWorld(worldContainer, current.snapshot.world, host, viewportRef.current)
 
@@ -236,8 +260,9 @@ export function WorldViewport() {
       tileCounts,
       tileBiomass,
       recentActivityTiles,
+      speciesTileIndices,
     )
-  }, [world, overlayMode, selectedTile, tileCounts, tileBiomass, snapshot.tick, recentActivityTiles])
+  }, [world, overlayMode, selectedTile, tileCounts, tileBiomass, snapshot.tick, recentActivityTiles, speciesTileIndices])
 
   return (
     <div className="flex min-h-[320px] flex-1 flex-col rounded-lg border border-command-border bg-command-surface/60">
@@ -265,7 +290,7 @@ export function WorldViewport() {
         aria-label="World viewport"
       />
       <p className="border-t border-command-border px-3 py-2 font-mono text-xs text-slate-500">
-        Scroll to zoom · drag to pan · click a tile to inspect · Life/Biomass overlays show population density
+        Scroll to zoom · drag to pan · click tile to inspect · select species to highlight range on map
       </p>
     </div>
   )

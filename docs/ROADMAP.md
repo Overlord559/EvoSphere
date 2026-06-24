@@ -33,24 +33,17 @@
 - [x] Life and biomass viewport overlays
 - [x] Biological event log
 
-## v0.3.1 Runtime + Observability ✅ (current)
+## v0.3.2 Species Highlight + Performance ✅ (current)
 
-- [x] Run / pause / step controls (1, 10, 100, 1,000 ticks)
-- [x] Speed modes: 1×, 10×, 100×, 1,000×
-- [x] Deep time fast-forward (+1K / +10K / +100K / +1M years)
-- [x] Simulated time abstraction (tick, generation estimate, years)
-- [x] Deep time summary events (population, biomass, species, colonization deltas)
-- [x] World briefing panel with era and live developments
-- [x] Species clustering fix (shared founder species, gated speciation)
-- [x] Throttled milestone events (no reproduction spam)
-- [x] Improved life/biomass overlay visibility + activity highlights
-
-### Intentionally not in v0.3.1
-
-- Animals and predators
-- Tools, culture, civilization, spiritual systems
-- Medicine, computing, spaceflight
-- IndexedDB persistence
+- [x] `selectedSpeciesId` in Zustand — select / focus / clear
+- [x] Species panel clickable rows with summary stats
+- [x] Viewport violet highlight for selected species tile occupancy
+- [x] Inspector cross-link — click species on tile to select
+- [x] Briefing panel selected-species mode
+- [x] Precomputed `speciesOccupancy` in life snapshot
+- [x] Deep-time batch stepping (5K ticks/chunk), O(1) tile counts
+- [x] Deep-time progress UI + runtime in summary
+- [x] ~5× faster +10K yr vs v0.3.1 sync benchmark (exact ticks preserved)
 
 ## v0.4 Behavior + Ecology expansion (next)
 

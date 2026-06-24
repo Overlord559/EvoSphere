@@ -38,8 +38,8 @@ export function CommandCenter() {
 
       <footer className="border-t border-command-border px-6 py-3">
         <p className="font-mono text-xs text-slate-500">
-          v0.3.1 — simulation runtime, deep time, and observability. Run/pause, step ticks, fast-forward
-          years, and watch life spread via Life/Biomass overlays. v0.4 adds mobile agents and predation.
+          v0.3.2 — species highlight + deep-time performance. Select a species to highlight its range on the map.
+          v0.4 adds mobile agents and predation.
         </p>
       </footer>
     </div>
