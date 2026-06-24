@@ -1,32 +1,40 @@
-# React + TypeScript + Vite
+# EvoSphere
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Browser-native evolution simulator — deterministic world generation, agent life cycles, genetics, ecology, culture, and civilization systems rendered in real time.
 
-Currently, two official plugins are available:
+**Current phase:** v0.1 foundation
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Status
 
-## React Compiler
+This repository contains the project scaffold: TypeScript types, folder structure, command-center UI shell, and placeholder simulation engine. Live simulation starts in v0.2.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Stack
 
-## Expanding the Oxlint configuration
+- Vite + React + TypeScript
+- Tailwind CSS v4
+- Pixi.js (viewport rendering — v0.2)
+- Zustand (state)
+- seedrandom (deterministic RNG)
+- nanoid, idb (planned for entities and persistence)
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Commands
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
+npm run build
+npm run lint
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Documentation
+
+- [Project Brief](docs/PROJECT_BRIEF.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Roadmap](docs/ROADMAP.md)
+
+## Principles
+
+- No backend — runs entirely in the browser
+- Deterministic simulation from seed
+- No external AI dependencies
+- 2D viewport (Pixi.js), not 3D
