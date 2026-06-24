@@ -1,9 +1,9 @@
 import { useSimulationStore } from '../store/simulationStore'
 import { CommandPanels } from '../ui/panels/CommandPanels'
-import { ViewportPlaceholder } from '../ui/viewport/ViewportPlaceholder'
+import { WorldViewport } from '../ui/viewport/WorldViewport'
 
 const MISSION =
-  'A deterministic, browser-native evolution simulator — from terrain to culture, rendered in real time.'
+  'A physics-constrained, Earth-like biosphere-to-space-age civilization simulator. Life emerges from simple origins — no preset endpoint species, no magic unlocks.'
 
 export function CommandCenter() {
   const phase = useSimulationStore((s) => s.phase)
@@ -29,7 +29,7 @@ export function CommandCenter() {
 
       <main className="flex flex-1 flex-col gap-4 p-6 lg:flex-row">
         <section className="flex flex-1 flex-col min-w-0" aria-label="Viewport">
-          <ViewportPlaceholder />
+          <WorldViewport />
         </section>
         <section className="w-full lg:w-[360px] shrink-0" aria-label="Command panels">
           <CommandPanels />
@@ -38,8 +38,8 @@ export function CommandCenter() {
 
       <footer className="border-t border-command-border px-6 py-3">
         <p className="font-mono text-xs text-slate-500">
-          Real simulation begins in the next phase (v0.2). This shell establishes
-          types, folder structure, and the command-center UI — no live ticks yet.
+          v0.2 — deterministic world generation and Pixi viewport are live. Life systems
+          (microbes, plants, agents) begin in v0.3.
         </p>
       </footer>
     </div>

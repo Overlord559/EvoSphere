@@ -1,12 +1,16 @@
 export type TerrainType =
+  | 'deep_ocean'
   | 'ocean'
   | 'coast'
-  | 'plains'
+  | 'grassland'
   | 'forest'
-  | 'mountain'
   | 'desert'
+  | 'mountain'
+  | 'river'
   | 'tundra'
   | 'swamp'
+  | 'volcanic'
+  | 'hydrothermal_vent'
 
 export interface Tile {
   x: number
@@ -15,6 +19,9 @@ export interface Tile {
   elevation: number
   moisture: number
   temperature: number
+  water: number
+  soilFertility: number
+  resourceDeposits: number
 }
 
 export interface World {
@@ -36,8 +43,8 @@ export interface SimulationSettings {
 export interface SimulationSnapshot {
   tick: number
   worldId: string
-  populationCount: number
-  eventCount: number
+  world: World
+  events: EventLogEntry[]
 }
 
 export interface EventLogEntry {
@@ -46,4 +53,20 @@ export interface EventLogEntry {
   type: string
   message: string
   timestamp: number
+}
+
+export type OverlayMode =
+  | 'terrain'
+  | 'elevation'
+  | 'moisture'
+  | 'temperature'
+  | 'water'
+  | 'fertility'
+
+export interface WorldStats {
+  tileCount: number
+  terrainDistribution: Partial<Record<TerrainType, number>>
+  averageTemperature: number
+  averageMoisture: number
+  waterCoveragePercent: number
 }

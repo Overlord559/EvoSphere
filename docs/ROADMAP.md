@@ -1,6 +1,6 @@
 # EvoSphere — Roadmap
 
-## v0.1 Foundation ✅ (current)
+## v0.1 Foundation ✅
 
 - [x] Vite + React + TypeScript scaffold
 - [x] Dependencies: pixi.js, zustand, seedrandom, nanoid, idb, tailwindcss
@@ -11,17 +11,28 @@
 - [x] Command-center UI shell
 - [x] Project documentation
 
-## v0.2 World + Viewport
+## v0.2 World + Viewport ✅ (current)
 
-- [ ] Procedural world generator from seed (`simulation/world`)
-- [ ] Tile grid with terrain types and climate attributes
-- [ ] Pixi.js viewport — pan/zoom tile map
-- [ ] SimEngine tick loop with world state
-- [ ] Basic event log (world generated, tick advanced)
-- [ ] Wire viewport to simulation snapshots
+- [x] Procedural world generator from seed (`simulation/world`)
+- [x] Tile grid with terrain types and climate attributes
+- [x] Pixi.js viewport — pan/zoom tile map with overlays
+- [x] SimEngine tick loop with world state
+- [x] Event log (world generated, reset, periodic ticks)
+- [x] Wire viewport and panels to simulation snapshots
+- [x] Tile selection and inspector panel
 
-## v0.3 Life
+### Intentionally not in v0.2
 
+- Agents, microbes, plants, animals
+- Species registry or population counts
+- Society, culture, technology
+- IndexedDB persistence
+- Climate simulation over time (ticks advance counter only)
+
+## v0.3 Life (next)
+
+- [ ] Microbial energy loop on fertile/wet tiles
+- [ ] Plant colonization of suitable biomes
 - [ ] Agent entities with position and species id
 - [ ] Genetics: traits, inheritance, mutation (`simulation/genetics`)
 - [ ] Behavior: movement, feeding, reproduction (`simulation/behavior`)

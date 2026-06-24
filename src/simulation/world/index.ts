@@ -1,2 +1,2 @@
-/** World generation — scheduled for v0.2 */
-export const WORLD_GEN_PHASE = 'v0.2' as const
+export { generateWorld, getTileAt } from './generateWorld'
+export { computeWorldStats, formatTemperature, formatPercent, sortTerrainDistribution, isWaterTile } from './worldStats'

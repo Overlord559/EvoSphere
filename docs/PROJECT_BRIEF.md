@@ -41,9 +41,18 @@ Not in v0.1:
 - Agent ticks
 - Persistence
 
-## Success Criteria for v0.2
+## v0.2 World + Viewport ✅ (current)
 
-- Procedural world from seed
-- Visible tile map in Pixi viewport
-- `SimEngine.step()` advances ticks with measurable state change
-- Event log receives at least one real event type
+Delivered in this phase:
+
+- Deterministic procedural world from seed
+- Pixi.js tile viewport with six overlay modes
+- SimEngine owns world, tick, and event log
+- World/Events/Inspector panels show real data
+- Tile click selection
+
+## Success Criteria for v0.3
+
+- Microbial/plant energy loop on real tile fertility
+- First agent entities with genetics
+- Species panel shows live counts (not placeholders)

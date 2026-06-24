@@ -1,21 +1,22 @@
 # EvoSphere
 
-Browser-native evolution simulator — deterministic world generation, agent life cycles, genetics, ecology, culture, and civilization systems rendered in real time.
+Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent life (v0.3+), and real-time Pixi viewport rendering.
 
-**Current phase:** v0.1 foundation
+**Current phase:** v0.2 world + viewport
 
 ## Status
 
-This repository contains the project scaffold: TypeScript types, folder structure, command-center UI shell, and placeholder simulation engine. Live simulation starts in v0.2.
+v0.2 delivers a deterministic procedural planet with climate attributes and a live Pixi.js tile map. The simulation engine owns world state and emits real events. Life systems (microbes, plants, agents) begin in v0.3.
 
 ## Stack
 
 - Vite + React + TypeScript
 - Tailwind CSS v4
-- Pixi.js (viewport rendering — v0.2)
-- Zustand (state)
+- Pixi.js (tile viewport)
+- Zustand (UI + session state)
 - seedrandom (deterministic RNG)
-- nanoid, idb (planned for entities and persistence)
+- nanoid (world/event IDs)
+- idb (persistence planned v0.5)
 
 ## Commands
 
@@ -25,6 +26,12 @@ npm run dev
 npm run build
 npm run lint
 ```
+
+## World generation
+
+Same seed + same settings always produce the same tile grid. Generation uses `forkRng()` substreams for elevation, moisture, temperature, rivers, and volcanic features. No `Math.random()`.
+
+Default world size: 96×96 tiles. Change via `SimulationSettings` in the store.
 
 ## Documentation
 
@@ -38,3 +45,4 @@ npm run lint
 - Deterministic simulation from seed
 - No external AI dependencies
 - 2D viewport (Pixi.js), not 3D
+- No fake population or species data
