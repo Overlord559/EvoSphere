@@ -1,5 +1,5 @@
-import { nanoid } from 'nanoid'
 import type { AgentKind } from '../../types/agents'
+import { nextSpeciesId } from '../../utils/deterministicId'
 import type {
   EntityKind,
   Genome,
@@ -13,6 +13,12 @@ import {
   DEFAULT_SPECIATION_CONFIG,
   type SpeciationConfig,
 } from './speciationConfig'
+import {
+  recordAggregateCompression,
+  recordExtinction,
+  recordPopulationDecline,
+  type MortalityCause,
+} from '../ecology/extinctionForensics'
 import { SpeciesMemoryStore } from '../cognition/speciesMemoryStore'
 
 let speciesCounter = 0
@@ -56,7 +62,7 @@ function baseRecord(
   isFounder: boolean,
 ): SpeciesRecord {
   return {
-    id: nanoid(),
+    id: nextSpeciesId(),
     name,
     kind,
     trophicRole: entityTrophicRole(kind),
@@ -180,7 +186,8 @@ export class SpeciesRegistry {
   }
 
   tickEstablishment(tick: number): void {
-    for (const record of this.species.values()) {
+    const records = [...this.species.values()].sort((a, b) => a.id.localeCompare(b.id))
+    for (const record of records) {
       if (record.establishmentStatus !== 'emerging') continue
       if (record.population <= 0 && tick - record.createdAtTick > 30) {
         record.establishmentStatus = 'failed'
@@ -233,7 +240,8 @@ export class SpeciesRegistry {
     let best: SpeciesRecord | undefined
     let bestDistance = maxDistance
 
-    for (const record of this.species.values()) {
+    const records = [...this.species.values()].sort((a, b) => a.id.localeCompare(b.id))
+    for (const record of records) {
       if (record.kind !== kind || record.establishmentStatus === 'failed') continue
       const stored = this.genomeBySpecies.get(record.id)
       if (!stored) continue
@@ -246,16 +254,45 @@ export class SpeciesRegistry {
     return best
   }
 
-  updateCounts(populations: Map<string, { count: number; biomass: number }>): void {
+  updateCounts(
+    populations: Map<string, { count: number; biomass: number; tracked?: number; aggregate?: number }>,
+  ): void {
     for (const record of this.species.values()) {
       const stats = populations.get(record.id)
       const prevPop = record.population
+      const prevTracked = stats?.tracked ?? prevPop
       record.population = stats?.count ?? 0
       record.totalBiomass = stats?.biomass ?? 0
+
+      const tracked = stats?.tracked ?? 0
+      const aggregate = stats?.aggregate ?? Math.max(0, record.population - tracked)
+
+      if (aggregate > 0 && tracked === 0 && record.population > 0) {
+        recordAggregateCompression(record, aggregate, tracked)
+      }
+
       if (record.population > prevPop + 1) record.populationTrend = 'growing'
       else if (record.population < prevPop - 1) record.populationTrend = 'declining'
       else if (record.population > 0) record.populationTrend = 'stable'
+
+      if (record.population <= 0 && prevPop > 0 && !record.hiddenAsAggregate) {
+        recordExtinction(
+          record,
+          record.extinctionCause ?? record.lastCauseOfDecline ?? 'Population reached zero',
+        )
+      }
+
+      void prevTracked
     }
+  }
+
+  recordMortality(speciesId: string, cause: MortalityCause, message: string): void {
+    const record = this.species.get(speciesId)
+    if (!record) return
+    recordPopulationDecline(record, cause, message, {
+      refugiaRemaining: record.refugiaRemaining ?? 0,
+      recoveryPossible: record.population > 0,
+    })
   }
 
   getAll(): SpeciesRecord[] {

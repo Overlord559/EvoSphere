@@ -40,6 +40,9 @@ import {
   dimensionsForPreset,
   settingsWithPreset,
 } from '../simulation/world/worldSizePresets'
+import type { OriginScenarioId } from '../simulation/world/originScenarios'
+import type { WorldArchetypeId } from '../simulation/world/worldArchetypes'
+import type { ReseedMode } from '../simulation/life/lifeReseed'
 import {
   syncAgentVisualStates,
   advanceAgentInterpolation,
@@ -76,6 +79,8 @@ const DEFAULT_SETTINGS: SimulationSettings = {
   worldHeight: DEFAULT_DIMS.height,
   tickRate: 1,
   worldSizePreset: DEFAULT_WORLD_SIZE_PRESET,
+  originScenarioId: 'random_mixed',
+  worldArchetype: 'earthlike',
 }
 
 export const DEEP_TIME_SNAPSHOT_EVERY_CHUNKS = 2
@@ -119,6 +124,14 @@ const DEFAULT_PERFORMANCE: PerformanceStats = {
   cameraUpdatesPerSec: 0,
   heapTrendMbPerMin: null,
   soakWarnings: [],
+  renderedMovingGlyphs: 0,
+  renderedProducerGlyphs: 0,
+  visibleCohortCount: 0,
+  skippedGlyphs: 0,
+  densityOnlyMode: false,
+  maxMovingGlyphCap: 160,
+  maxProducerGlyphCap: 120,
+  estimatedPopVsRenderedReps: null,
 }
 
 function buildHealthStats(
@@ -346,8 +359,11 @@ interface SimulationStore {
   zoomOutCamera: () => void
   fitPlanetCamera: () => void
   updatePerformanceStats: (partial: Partial<PerformanceStats>) => void
-  newWorldFromSeed: (seed: string) => void
+  newWorldFromSeed: (seed: string, settingsOverride?: SimulationSettings) => void
   newWorldRandomSeed: () => void
+  setOriginScenario: (id: OriginScenarioId) => void
+  setWorldArchetype: (id: WorldArchetypeId) => void
+  reseedLife: (mode?: ReseedMode) => void
   resetWorld: () => void
   stepSimulation: (count?: number) => void
   play: () => void
@@ -801,12 +817,12 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
     })
   },
 
-  newWorldFromSeed: (seed) => {
+  newWorldFromSeed: (seed, settingsOverride) => {
     stopRuntimeLoop()
     const trimmed = seed.trim()
     if (!trimmed) return
     const { settings } = get()
-    const nextSettings = { ...settings, seed: trimmed }
+    const nextSettings = settingsOverride ?? { ...settings, seed: trimmed }
     if (get().workerMode && workerClient) {
       void reinitWorker(nextSettings, null).then(() => {
         set({
@@ -846,6 +862,25 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
 
   newWorldRandomSeed: () => {
     get().newWorldFromSeed(randomSeed())
+  },
+
+  setOriginScenario: (id) => {
+    const { settings } = get()
+    get().newWorldFromSeed(settings.seed, { ...settings, originScenarioId: id })
+  },
+
+  setWorldArchetype: (id) => {
+    const { settings } = get()
+    get().newWorldFromSeed(settings.seed, { ...settings, worldArchetype: id })
+  },
+
+  reseedLife: (mode = 'default') => {
+    const { engine } = get()
+    const seeded = engine.reseedLife(mode)
+    if (seeded > 0) {
+      const snapshot = syncSnapshot(engine, get().selectedSpeciesId)
+      set({ snapshot, recentActivityTiles: engine.getRecentActivityTileIndices() })
+    }
   },
 
   resetWorld: () => {

@@ -15,11 +15,11 @@ export interface SpeciationConfig {
 }
 
 export const DEFAULT_SPECIATION_CONFIG: SpeciationConfig = {
-  minGenerationsBeforeVariant: 4,
+  minGenerationsBeforeVariant: 6,
   minGenerationsBeforeSpeciation: 10,
-  geneticDistanceVariantThreshold: 0.08,
+  geneticDistanceVariantThreshold: 0.1,
   geneticDistanceThreshold: 0.2,
-  minPopulationForVariant: 6,
+  minPopulationForVariant: 8,
   minPopulationForSubspecies: 10,
   minPopulationForBranch: 16,
   minLocalFitnessAdvantage: 0.08,

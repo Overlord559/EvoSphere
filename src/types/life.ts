@@ -79,6 +79,15 @@ export interface SpeciesRecord {
   establishmentGraceTicks: number
   /** Species-level learned behavior memory (proto-cognition). */
   speciesMemoryScore: number
+  /** v0.5.4e extinction / die-off forensics */
+  lastCauseOfDecline?: string | null
+  lastMajorMortalityCause?: string | null
+  populationChangeReason?: string | null
+  extinctionCause?: string | null
+  hiddenAsAggregate?: boolean
+  convertedToCohort?: boolean
+  refugiaRemaining?: number
+  recoveryPossible?: boolean
 }
 
 export interface TileLifeData {

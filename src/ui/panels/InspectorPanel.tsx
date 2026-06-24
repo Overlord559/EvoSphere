@@ -32,6 +32,7 @@ export function InspectorPanel() {
   )
   const tileAgents = agentsOnTile(snapshot.agents.agents, selectedTile.x, selectedTile.y)
   const idx = selectedTile.y * snapshot.world.width + selectedTile.x
+  const tilePopulationUnits = snapshot.life.populationUnits.filter((u) => u.tileIndex === idx)
   const isActive = isTileActive(snapshot.world, selectedTile.x, selectedTile.y)
   const isVoid = selectedTile.terrain === 'void' || !isActive
   const tileCount = snapshot.life.tileCounts[idx] ?? 0
@@ -135,6 +136,20 @@ export function InspectorPanel() {
               <Row label="Mobile agents" value={String(agentCount)} />
               <Row label="Biomass" value={tileBiomass.toFixed(2)} />
             </dl>
+
+            {tilePopulationUnits.length > 0 && (
+              <div className="mb-2 rounded border border-violet-500/20 bg-violet-500/5 p-2">
+                <p className="mb-1 font-mono text-[10px] text-violet-300">POPULATION UNITS / COHORTS</p>
+                <ul className="space-y-1 font-mono text-[10px] text-slate-400">
+                  {tilePopulationUnits.map((unit) => (
+                    <li key={unit.id}>
+                      {unit.unitType} · ~{unit.representedIndividuals.toLocaleString()} {unit.displayScaleLabel}
+                      {unit.representedIndividuals > 1000 ? ' (compressed aggregate)' : ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {(topSpecies.length > 0 || topAgents.length > 0) && (
               <div className="mb-2">

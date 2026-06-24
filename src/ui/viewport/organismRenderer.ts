@@ -2,17 +2,18 @@ import type { MobileAgent } from '../../types/agents'
 import type { LifeOrganism } from '../../types/life'
 import type { OverlayMode, Tile, World } from '../../types/simulation'
 import type { AgentVisualState } from '../../types/runtime'
+import type { PopulationUnit } from '../../simulation/ecology/populationUnits'
 import { maxTileDensity } from '../../simulation/life/LifeSystem'
 import { drawOrganicTile, drawDebugTile, drawVoidTile } from './biomeRenderer'
 import { drawAgentGlyph } from './agentGlyphs'
 import { drawPlantGlyphsForTile } from './plantGlyphs'
+import { drawCohortGlyph } from './cohortGlyphs'
 import type { RenderLayers } from './renderLayers'
 import {
   clearAllLayerGraphics,
   clearAnimatedLayerGraphics,
 } from './renderLayers'
 import type { TileColorContext } from './tileColors'
-import { zoomDetailLevel } from './visualGenes'
 import { interpolatedTilePosition, isAgentMoving } from './agentInterpolation'
 import { pulseAlpha } from './animationLayer'
 import {
@@ -21,12 +22,14 @@ import {
   type ViewBounds,
 } from './viewportCulling'
 import {
-  MAX_AGENTS_DRAWN_CLOSE,
-  MAX_AGENTS_DRAWN_FAR,
-  MAX_AGENTS_DRAWN_MEDIUM,
   MAX_DETAILED_GLYPHS,
   MAX_PLANT_GLYPH_TILES,
 } from '../../simulation/engine/stabilityGuards'
+import {
+  applyRenderBudget,
+  renderBudgetMetrics,
+  type RenderBudgetMetrics,
+} from './renderBudget'
 
 export type VisualMode = 'organic' | 'debug'
 
@@ -42,6 +45,7 @@ export interface OrganismRenderContext {
   tileBiomass: number[]
   organisms: LifeOrganism[]
   agents: MobileAgent[]
+  populationUnits?: PopulationUnit[]
   agentVisualStates: Map<string, AgentVisualState>
   animTimeMs: number
   simTick: number
@@ -51,17 +55,20 @@ export interface OrganismRenderContext {
   selectedSpeciesId: string | null
   selectedTile: Tile | null
   viewBounds: ViewBounds
-  /** When true, terrain/plant base layers retain previous frame — agents/overlays only. */
   skipTerrainRedraw?: boolean
   redrawMode?: RedrawMode
+  renderOverload?: boolean
+  debugRenderOverride?: boolean
 }
 
 export interface RenderStats {
   drawnTiles: number
   drawnAgents: number
   drawnPlantTiles: number
+  drawnCohortGlyphs: number
   lodLevel: 'far' | 'medium' | 'close'
   terrainRedrawn: boolean
+  renderBudget: RenderBudgetMetrics
 }
 
 function buildColorContext(
@@ -122,12 +129,33 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
     viewBounds,
   } = ctx
 
+  const selectedTileIndex =
+    selectedTile != null ? selectedTile.y * world.width + selectedTile.x : null
+
+  const budget = applyRenderBudget(
+    {
+      zoom,
+      viewBounds,
+      agents,
+      organisms,
+      populationUnits: ctx.populationUnits,
+      selectedSpeciesId,
+      selectedTileIndex,
+      debugOverride: ctx.debugRenderOverride,
+      overload: ctx.renderOverload,
+    },
+    world.width,
+  )
+
+  const metrics = renderBudgetMetrics(budget)
+  const detail = budget.lodLevel
+  const densityOnly = budget.densityOnlyMode
+
   const baseContext = buildColorContext(overlay, tileCounts, tileBiomass, activityTiles)
   const speciesSet =
     speciesTileIndices && speciesTileIndices.length > 0
       ? new Set(speciesTileIndices)
       : null
-  const detail = zoomDetailLevel(zoom)
   const orgByTile = organismsByTile(organisms, world.width)
   const maxCount = maxTileDensity(tileCounts)
   const drawTile = visualMode === 'organic' ? drawOrganicTile : drawDebugTile
@@ -163,32 +191,55 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
         }
         drawnTiles += 1
 
+        if (densityOnly && overlay !== 'life' && overlay !== 'biomass') continue
+
         const tileOrgs = orgByTile.get(idx)
+        const hasProducerUnit = budget.producerUnitsToDraw.some((u) => u.tileIndex === idx)
         if (
-          tileOrgs &&
-          tileOrgs.length > 0 &&
-          visualMode === 'organic' &&
-          drawnPlantTiles < MAX_PLANT_GLYPH_TILES
+          (tileOrgs && tileOrgs.length > 0) || hasProducerUnit || (tileCounts[idx] ?? 0) > 0.5
         ) {
-          drawPlantGlyphsForTile(
-            plantsG,
-            tile,
-            tileSize,
-            tileCounts[idx] ?? 0,
-            tileBiomass[idx] ?? 0,
-            maxCount,
-            tileOrgs,
-            detail,
-            selectedSpeciesId,
-            animTimeMs,
-          )
-          drawnPlantTiles += 1
+          if (visualMode === 'organic' && drawnPlantTiles < MAX_PLANT_GLYPH_TILES) {
+            if (tileOrgs && tileOrgs.length > 0) {
+              drawPlantGlyphsForTile(
+                plantsG,
+                tile,
+                tileSize,
+                tileCounts[idx] ?? 0,
+                tileBiomass[idx] ?? 0,
+                maxCount,
+                tileOrgs,
+                densityOnly ? 'far' : detail === 'close' ? detail : 'medium',
+                selectedSpeciesId,
+                animTimeMs,
+              )
+            } else if (hasProducerUnit) {
+              const unit = budget.producerUnitsToDraw.find((u) => u.tileIndex === idx)
+              if (unit) {
+                drawCohortGlyph(
+                  plantsG,
+                  unit,
+                  -1,
+                  -1,
+                  tileSize,
+                  world.width,
+                  {
+                    phaseMs: animTimeMs,
+                    moving: false,
+                    isSelectedSpecies: unit.speciesId === selectedSpeciesId,
+                    densityOnly,
+                    animateFully: budget.animateFully,
+                  },
+                )
+              }
+            }
+            drawnPlantTiles += 1
+          }
         }
       }
     }
   }
 
-  if (speciesSet) {
+  if (speciesSet && !densityOnly) {
     const pulse = pulseAlpha(animTimeMs, 0.22, 0.08)
     const highlightG = layers.graphics.speciesHighlight
     for (const idx of speciesSet) {
@@ -208,7 +259,7 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
       if (!tileIndexInBounds(idx, world.width, viewBounds)) continue
       const x = idx % world.width
       const y = Math.floor(idx / world.width)
-      const actPulse = pulseAlpha(animTimeMs + idx, 0.45, 0.35)
+      const actPulse = pulseAlpha(animTimeMs + idx, 0.45, densityOnly ? 0.2 : 0.35)
       activityG.rect(x * tileSize, y * tileSize, tileSize, tileSize)
       activityG.stroke({ width: 1, color: 0xfbbf24, alpha: actPulse })
     }
@@ -227,36 +278,75 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
     }
   }
 
-  const maxAgentsToDraw =
-    detail === 'close'
-      ? MAX_AGENTS_DRAWN_CLOSE
-      : detail === 'medium'
-        ? MAX_AGENTS_DRAWN_MEDIUM
-        : MAX_AGENTS_DRAWN_FAR
+  const agentsG = layers.graphics.agents
+  let drawnCohortGlyphs = 0
 
-  const visibleAgents: MobileAgent[] = []
-  for (const agent of agents) {
-    if (!isTileInBounds(agent.x, agent.y, viewBounds)) continue
-    visibleAgents.push(agent)
-    if (visibleAgents.length >= maxAgentsToDraw) break
+  for (const unit of budget.cohortUnitsToDraw) {
+    if (!tileIndexInBounds(unit.tileIndex, world.width, viewBounds)) continue
+    drawCohortGlyph(agentsG, unit, -1, -1, tileSize, world.width, {
+      phaseMs: animTimeMs,
+      moving: !densityOnly,
+      isSelectedSpecies: unit.speciesId === selectedSpeciesId,
+      densityOnly,
+      animateFully: budget.animateFully,
+    })
+    drawnCohortGlyphs += 1
   }
 
-  const agentsG = layers.graphics.agents
-  for (const agent of visibleAgents) {
+  for (const agent of budget.agentsToDraw) {
     const visual = agentVisualStates.get(agent.id)
     const pos = visual ? interpolatedTilePosition(visual) : { x: agent.x, y: agent.y }
     const cx = pos.x * tileSize + tileSize / 2
     const cy = pos.y * tileSize + tileSize / 2
     const isSelectedSpecies = agent.speciesId === selectedSpeciesId
-    const moving = visual ? isAgentMoving(visual) : false
-    const useDetail = detail === 'close' && detailedGlyphs < MAX_DETAILED_GLYPHS ? detail : detail === 'close' ? 'medium' : detail
+    const moving = visual ? isAgentMoving(visual) && budget.animateFully : false
+    const useDetail =
+      detail === 'close' && detailedGlyphs < MAX_DETAILED_GLYPHS && budget.animateFully
+        ? detail
+        : detail === 'close'
+          ? 'medium'
+          : detail
 
     if (visualMode === 'organic') {
-      drawAgentGlyph(agentsG, agent, cx, cy, tileSize, useDetail, isSelectedSpecies, {
-        phaseMs: animTimeMs,
-        moving,
-      })
-      if (useDetail === 'close') detailedGlyphs += 1
+      if (densityOnly) {
+        drawCohortGlyph(
+          agentsG,
+          {
+            id: agent.id,
+            speciesId: agent.speciesId,
+            kind: agent.kind,
+            unitType: agent.trophicRole === 'predator' ? 'pack' : agent.trophicRole === 'scavenger' ? 'swarm' : 'herd',
+            tileIndex: agent.y * world.width + agent.x,
+            representedIndividuals: 200,
+            biomass: agent.biomass,
+            density: 0.5,
+            health: agent.health,
+            averageEnergy: agent.energy,
+            averageAge: 0,
+            averageGeneration: agent.generation,
+            lastUpdatedTick: 0,
+            displayScaleLabel: 'herd',
+          },
+          cx,
+          cy,
+          tileSize,
+          world.width,
+          {
+            phaseMs: animTimeMs,
+            moving: false,
+            isSelectedSpecies,
+            densityOnly: true,
+            animateFully: false,
+          },
+        )
+        drawnCohortGlyphs += 1
+      } else {
+        drawAgentGlyph(agentsG, agent, cx, cy, tileSize, useDetail, isSelectedSpecies, {
+          phaseMs: animTimeMs,
+          moving,
+        })
+        if (useDetail === 'close') detailedGlyphs += 1
+      }
     } else {
       let color = 0x4ade80
       if (agent.trophicRole === 'predator') color = 0xf87171
@@ -283,9 +373,11 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
 
   return {
     drawnTiles,
-    drawnAgents: visibleAgents.length,
+    drawnAgents: budget.agentsToDraw.length,
     drawnPlantTiles,
+    drawnCohortGlyphs,
     lodLevel: detail,
     terrainRedrawn: !skipTerrain,
+    renderBudget: metrics,
   }
 }

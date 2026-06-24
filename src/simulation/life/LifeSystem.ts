@@ -43,6 +43,7 @@ import {
   MAX_SPECIES_POP_HISTORY,
 } from '../engine/stabilityGuards'
 import { createFounderOrganism, createOrganism } from './createLife'
+import { reseedEventMessage, type ReseedMode } from './lifeReseed'
 import { SpeciesRegistry, resetSpeciesCounter } from '../species/speciesRegistry'
 import { buildSpeciesOccupancy } from '../species/speciesOccupancy'
 import { DEFAULT_SPECIATION_CONFIG } from '../species/speciationConfig'
@@ -884,7 +885,7 @@ export class LifeSystem {
 
   private rebuildTileIndex(world: World): void {
     this.initTileArrays(world)
-    const popMap = new Map<string, { count: number; biomass: number }>()
+    const popMap = new Map<string, { count: number; biomass: number; tracked: number; aggregate: number }>()
     let totalBiomass = 0
 
     for (const organism of this.organisms) {
@@ -893,8 +894,9 @@ export class LifeSystem {
       this.tileBiomass[idx] += organism.biomass
       totalBiomass += organism.biomass
 
-      const stats = popMap.get(organism.speciesId) ?? { count: 0, biomass: 0 }
+      const stats = popMap.get(organism.speciesId) ?? { count: 0, biomass: 0, tracked: 0, aggregate: 0 }
       stats.count += 1
+      stats.tracked += 1
       stats.biomass += organism.biomass
       popMap.set(organism.speciesId, stats)
     }
@@ -908,8 +910,9 @@ export class LifeSystem {
     }
 
     for (const [speciesId, aggStats] of aggMap) {
-      const stats = popMap.get(speciesId) ?? { count: 0, biomass: 0 }
+      const stats = popMap.get(speciesId) ?? { count: 0, biomass: 0, tracked: 0, aggregate: 0 }
       stats.count += aggStats.count
+      stats.aggregate = aggStats.count
       stats.biomass += aggStats.biomass
       popMap.set(speciesId, stats)
     }
@@ -946,7 +949,7 @@ export class LifeSystem {
     prePopulation: number,
     preSpeciesIds: Set<string>,
   ): void {
-    const population = this.organisms.length
+    const population = this.getBiologicalPopulation()
     const biomass = this.cachedTotalBiomass
     const populationDelta = population - this.lastPopulation
     const biomassDelta = biomass - this.lastBiomass
@@ -994,7 +997,9 @@ export class LifeSystem {
 
     for (const species of this.registry.getAll()) {
       if (species.population === 0 && preSpeciesIds.has(species.id) && !species.isFounderLineage) {
-        emit('life.extinction', `Extinction: "${species.name}" (${species.kind}) — population reached zero`)
+        if (species.hiddenAsAggregate) continue
+        const cause = species.extinctionCause ?? 'Population reached zero'
+        emit('life.extinction', `Extinction: "${species.name}" (${species.kind}) — ${cause}`)
       }
     }
 
@@ -1014,6 +1019,37 @@ export class LifeSystem {
     this.lastPopulation = population
     this.lastBiomass = biomass
     this.lastDominantSpeciesId = dominant?.id ?? null
+  }
+
+  reseedAtSites(
+    world: World,
+    sites: Array<{ x: number; y: number; lifeKind: LifeKind }>,
+    tick: number,
+    emit: LifeEventEmitter,
+    mode: ReseedMode,
+  ): number {
+    let seeded = 0
+    for (const site of sites) {
+      if (!isTileActive(world, site.x, site.y)) continue
+      this.spawnFounder(site.lifeKind, site.x, site.y, world, tick)
+      seeded += 1
+    }
+    if (seeded > 0) {
+      this.rebuildTileIndex(world)
+      for (let i = 0; i < this.tileCounts.length; i++) {
+        if (this.tileCounts[i] > 0) this.colonizedTiles.add(i)
+      }
+      emit('life.first', reseedEventMessage(mode, seeded))
+    }
+    return seeded
+  }
+
+  countRefugiaTiles(): number {
+    let tiles = 0
+    for (let i = 0; i < this.tileCounts.length; i++) {
+      if (this.tileCounts[i] > 0 || this.aggregate.getTileCount(i) > 0) tiles += 1
+    }
+    return tiles
   }
 }
 

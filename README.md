@@ -2,9 +2,19 @@
 
 Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, mobile agents with predation, circular planet viewport, and Spore-inspired procedural Pixi rendering.
 
-**Current phase:** v0.5.4d Population Units + Cohort Representation + Ultra Crash Fix
+**Current phase:** v0.5.4e Seed Diversity + Extinction Forensics + Representative Rendering Cap
 
 ## Status
+
+v0.5.4e seed diversity + extinction forensics + representative rendering cap (2026-06-24):
+
+- **Origin scenarios** — abiogenesis (vent/coastal/freshwater/volcanic), panspermia (meteor/icy moon), speculative seeder (labeled), random mixed; deterministic from seed + scenario
+- **World archetypes** — ocean/island/ice/volcanic/mountain/basin/earthlike/desert/random modifiers for land/ocean, moisture, vents, ridges
+- **Extinction forensics** — `lastCauseOfDecline`, aggregate compression flags, planet.extinction event, reseed controls (vent/meteor/coastal/alien speculative)
+- **Representative render cap** — `renderBudget.ts` samples ≤160 moving glyphs (300 hard max); cohort/patch glyphs; density-only far zoom
+- **UI** — seed input, origin/archetype dropdowns, reseed buttons, Soak HUD render metrics, Briefing/Inspector compression clarity
+- **QA** — `qa:world-variety`, `qa:render-budget`, `qa:extinction-forensics`
+- **Blocked until Ultra browser soak passes:** v0.6 Communication + Social Learning
 
 v0.5.4d population units + cohort representation (2026-06-24):
 

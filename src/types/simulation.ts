@@ -64,6 +64,10 @@ export interface OriginProfile {
   originEnergySources: string[]
   explanation: string
   founderSites: OriginFounderSite[]
+  /** v0.5.4e origin scenario metadata */
+  originScenarioId?: string
+  originScenarioLabel?: string
+  scientificOrigin?: boolean
 }
 
 export interface OriginFounderSite {
@@ -111,6 +115,8 @@ export interface World {
   activeMask: boolean[]
   /** Deterministic founder-life origin profile for this world. */
   originProfile: OriginProfile
+  /** Resolved world archetype label (v0.5.4e). */
+  worldArchetypeLabel?: string
 }
 
 export type WorldSizePreset = 'small' | 'standard' | 'large' | 'experimental'
@@ -121,6 +127,10 @@ export interface SimulationSettings {
   worldHeight: number
   tickRate: number
   worldSizePreset: WorldSizePreset
+  /** Origin scenario — default random_mixed uses plausible natural origins. */
+  originScenarioId?: import('../simulation/world/originScenarios').OriginScenarioId
+  /** World terrain/climate archetype modifier. */
+  worldArchetype?: import('../simulation/world/worldArchetypes').WorldArchetypeId
 }
 
 export interface SimulationSnapshot {

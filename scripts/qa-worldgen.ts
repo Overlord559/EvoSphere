@@ -34,6 +34,7 @@ console.log(`EvoSphere worldgen QA — ${width}×${height} (${PRESET})\n`)
 
 let pass = true
 const originProfiles = new Set<string>()
+const originTileSets = new Set<string>()
 
 for (const seed of TEST_SEEDS) {
   const engine = new SimEngine({
@@ -42,11 +43,14 @@ for (const seed of TEST_SEEDS) {
     worldHeight: height,
     tickRate: 10,
     worldSizePreset: PRESET,
+    originScenarioId: 'random_mixed',
+    worldArchetype: 'random',
   })
   const world = engine.getWorld()
   const counts = terrainCounts(world)
-  const profile = world.originProfile.originProfileName
+  const profile = world.originProfile.originScenarioId ?? world.originProfile.originProfileName
   originProfiles.add(profile)
+  originTileSets.add([...world.originProfile.founderTileIds].sort((a, b) => a - b).join(','))
 
   let bioticAtBirth = 0
   for (const tile of world.tiles) {
@@ -71,9 +75,14 @@ for (const seed of TEST_SEEDS) {
     worldHeight: height,
     tickRate: 10,
     worldSizePreset: PRESET,
+    originScenarioId: 'random_mixed',
+    worldArchetype: 'random',
   })
   const world2 = engine2.getWorld()
-  if (world2.originProfile.originProfileName !== profile) {
+  const profile2 = world2.originProfile.originScenarioId ?? world2.originProfile.originProfileName
+  const tiles1 = [...world.originProfile.founderTileIds].sort((a, b) => a - b).join(',')
+  const tiles2 = [...world2.originProfile.founderTileIds].sort((a, b) => a - b).join(',')
+  if (profile2 !== profile || tiles1 !== tiles2) {
     pass = false
     console.log(`[FAIL] ${seed} — origin profile not deterministic`)
   }
@@ -85,11 +94,11 @@ for (const seed of TEST_SEEDS) {
   )
 }
 
-if (originProfiles.size < 2) {
+if (originTileSets.size < 2) {
   pass = false
-  console.log(`\n[FAIL] Origin profiles too similar (${originProfiles.size} unique)`)
+  console.log(`\n[FAIL] Origin founder layouts too similar (${originTileSets.size} unique tile sets)`)
 } else {
-  console.log(`\nOrigin profile variety: ${originProfiles.size} unique profiles`)
+  console.log(`\nOrigin variety: ${originProfiles.size} scenario ids · ${originTileSets.size} unique founder layouts`)
 }
 
 console.log(`\nWORLDGEN QA: ${pass ? 'PASS' : 'FAIL'}`)

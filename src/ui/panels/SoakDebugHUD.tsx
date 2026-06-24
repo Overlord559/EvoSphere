@@ -63,7 +63,11 @@ export function SoakDebugHUD() {
         <span>est {formatEstimatedPopulation(estBio)}</span>
         <span>units {rep?.populationUnitsCount ?? 0}</span>
         <span>tracked {snapshot.life.totalOrganisms}+{snapshot.agents.totalAgents}</span>
-        <span>render {perf.drawnAgents + perf.drawnPlantTiles}</span>
+        <span>render {perf.renderedMovingGlyphs}/{perf.maxMovingGlyphCap}</span>
+        <span>prod {perf.renderedProducerGlyphs}/{perf.maxProducerGlyphCap}</span>
+        <span>skip {perf.skippedGlyphs}</span>
+        {perf.densityOnlyMode && <span className="text-cyan-400">density-only</span>}
+        <span>cohort {perf.visibleCohortCount}</span>
         <span>compress {rep?.compressionRatio ?? 0}×</span>
         <span>orgs {snapshot.life.totalOrganisms}+{formatEstimatedPopulation(snapshot.life.aggregateOrganisms)}</span>
         <span>agents {snapshot.agents.totalAgents}+{formatEstimatedPopulation(snapshot.agents.populationReserve)}</span>

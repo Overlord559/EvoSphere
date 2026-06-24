@@ -1,5 +1,5 @@
-import { nanoid } from 'nanoid'
 import type { EnergySource, LifeKind, LifeOrganism } from '../../types/life'
+import { nextLifeId } from '../../utils/deterministicId'
 import { createBaseGenome } from '../genetics/genome'
 import type { Genome } from '../../types/life'
 
@@ -40,7 +40,7 @@ export function createOrganism(
 ): LifeOrganism {
   const maxAge = Math.round(genome.lifespan * (0.85 + generation * 0.02))
   return {
-    id: nanoid(),
+    id: nextLifeId(),
     speciesId,
     kind,
     x,

@@ -93,6 +93,16 @@ export interface BriefingSnapshot {
   disasterPacingSummary: string | null
   /** Population architecture summary for briefing/UI. */
   populationArchitecture: PopulationArchitectureBriefing | null
+  /** v0.5.4e render budget / representative cap summary */
+  renderBudgetSummary: string | null
+  /** v0.5.4e extinction forensics headline */
+  extinctionForensicsSummary: string | null
+  /** Planet-wide extinction event (all life lost) */
+  planetExtinctionCause: string | null
+  /** Origin scenario label for UI */
+  originScenarioLabel: string | null
+  /** World archetype label for UI */
+  worldArchetypeLabel: string | null
 }
 
 export interface PopulationArchitectureBriefing {
@@ -146,6 +156,11 @@ export interface SelectedSpeciesBriefing {
   selectionPressures: string[]
   extinctionRisk: number | null
   adaptationNotes: string[]
+  /** v0.5.4e forensics when inspecting species */
+  lastCauseOfDecline?: string | null
+  hiddenAsAggregate?: boolean
+  convertedToCohort?: boolean
+  populationChangeReason?: string | null
 }
 
 export interface SimulationSnapshot {
@@ -275,6 +290,15 @@ export interface PerformanceStats {
   cameraUpdatesPerSec: number
   heapTrendMbPerMin: number | null
   soakWarnings: SoakWarning[]
+  /** v0.5.4e representative rendering caps */
+  renderedMovingGlyphs: number
+  renderedProducerGlyphs: number
+  visibleCohortCount: number
+  skippedGlyphs: number
+  densityOnlyMode: boolean
+  maxMovingGlyphCap: number
+  maxProducerGlyphCap: number
+  estimatedPopVsRenderedReps: string | null
 }
 
 export interface RuntimeState {

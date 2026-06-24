@@ -248,6 +248,8 @@ export function WorldViewport() {
 
       agents: state.snapshot.agents.agents,
 
+      populationUnits: state.snapshot.life.populationUnits,
+
       agentVisualStates: state.agentVisualStates,
 
       animTimeMs: state.animTimeMs,
@@ -272,6 +274,12 @@ export function WorldViewport() {
       skipTerrainRedraw: skipTerrain,
 
       redrawMode: mode,
+
+      renderOverload:
+        state.runtime.performance.crashRiskLevel === 'high' ||
+        state.runtime.speed === 'ultrafast',
+
+      debugRenderOverride: state.visualMode === 'debug',
     });
     if (stats.terrainRedrawn) {
       terrainRedrawCountRef.current += 1;
@@ -288,6 +296,15 @@ export function WorldViewport() {
 
     updatePerformanceStats({
       ...stats,
+
+      renderedMovingGlyphs: stats.renderBudget.renderedMovingGlyphs,
+      renderedProducerGlyphs: stats.renderBudget.renderedProducerGlyphs,
+      visibleCohortCount: stats.renderBudget.visibleCohortCount,
+      skippedGlyphs: stats.renderBudget.skippedGlyphs,
+      densityOnlyMode: stats.renderBudget.densityOnlyMode,
+      maxMovingGlyphCap: stats.renderBudget.maxMovingCap,
+      maxProducerGlyphCap: stats.renderBudget.maxProducerCap,
+      estimatedPopVsRenderedReps: `${state.snapshot.life.totalBiologicalPopulation + state.snapshot.agents.totalMobilePopulation} est / ${stats.renderBudget.renderedMovingGlyphs} drawn`,
 
       pixiGraphicsCount: pixiCount,
 

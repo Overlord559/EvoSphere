@@ -3,6 +3,10 @@ import { useSimulationStore } from '../../store/simulationStore'
 import type { SimSpeed } from '../../types/runtime'
 import type { WorldSizePreset } from '../../types/simulation'
 import { WORLD_SIZE_PRESETS } from '../../simulation/world/worldSizePresets'
+import { ORIGIN_SCENARIO_LIST } from '../../simulation/world/originScenarios'
+import { WORLD_ARCHETYPES } from '../../simulation/world/worldArchetypes'
+import type { OriginScenarioId } from '../../simulation/world/originScenarios'
+import type { WorldArchetypeId } from '../../simulation/world/worldArchetypes'
 import { formatSimYears, buildSimTimeDisplay } from '../../simulation/engine/simTime'
 import type { NaturalDisasterFrequency } from '../../simulation/config/disasterConfig'
 import { ALL_DISASTER_TYPES, DISASTER_LABELS } from '../../simulation/disasters/DisasterTypes'
@@ -50,6 +54,10 @@ export function SimulationControls() {
   const cancelDeepTime = useSimulationStore((s) => s.cancelDeepTime)
   const resetWorld = useSimulationStore((s) => s.resetWorld)
   const newWorldRandomSeed = useSimulationStore((s) => s.newWorldRandomSeed)
+  const newWorldFromSeed = useSimulationStore((s) => s.newWorldFromSeed)
+  const setOriginScenario = useSimulationStore((s) => s.setOriginScenario)
+  const setWorldArchetype = useSimulationStore((s) => s.setWorldArchetype)
+  const reseedLife = useSimulationStore((s) => s.reseedLife)
   const setWorldSizePreset = useSimulationStore((s) => s.setWorldSizePreset)
   const setPauseWhileInspecting = useSimulationStore((s) => s.setPauseWhileInspecting)
   const setFollowSelectedSpecies = useSimulationStore((s) => s.setFollowSelectedSpecies)
@@ -58,6 +66,7 @@ export function SimulationControls() {
   const workerFallbackReason = useSimulationStore((s) => s.workerFallbackReason)
 
   const [debugOpen, setDebugOpen] = useState(false)
+  const [seedInput, setSeedInput] = useState(settings.seed)
   const [disasterType, setDisasterType] = useState<DisasterType>('wildfire')
   const [disasterSeverity, setDisasterSeverity] = useState<(typeof DISASTER_SEVERITIES)[number]>('moderate')
   const disasterFreq =
@@ -157,6 +166,76 @@ export function SimulationControls() {
           Random World
         </ControlButton>
       </div>
+
+      <div className="space-y-2 rounded border border-command-border/60 p-2">
+        <p className="font-mono text-xs text-slate-500">WORLD SEED & ORIGIN</p>
+        <div className="flex flex-wrap gap-2">
+          <input
+            type="text"
+            value={seedInput}
+            onChange={(e) => setSeedInput(e.target.value)}
+            className="min-w-[140px] flex-1 rounded border border-command-border bg-command-bg px-2 py-1 font-mono text-xs text-slate-200"
+            placeholder="World seed"
+          />
+          <ControlButton
+            onClick={() => newWorldFromSeed(seedInput)}
+            disabled={isRunning || deepTimeRunning || !seedInput.trim()}
+          >
+            Apply Seed
+          </ControlButton>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={settings.originScenarioId ?? 'random_mixed'}
+            onChange={(e) => setOriginScenario(e.target.value as OriginScenarioId)}
+            disabled={isRunning || deepTimeRunning}
+            className="rounded border border-command-border bg-command-bg px-2 py-1 font-mono text-xs text-slate-300"
+          >
+            {ORIGIN_SCENARIO_LIST.map((s) => (
+              <option key={s.originScenarioId} value={s.originScenarioId}>
+                {s.scientific ? s.label : `[SPEC] ${s.label}`}
+              </option>
+            ))}
+          </select>
+          <select
+            value={settings.worldArchetype ?? 'earthlike'}
+            onChange={(e) => setWorldArchetype(e.target.value as WorldArchetypeId)}
+            disabled={isRunning || deepTimeRunning}
+            className="rounded border border-command-border bg-command-bg px-2 py-1 font-mono text-xs text-slate-300"
+          >
+            {Object.values(WORLD_ARCHETYPES).map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {snapshot.briefing.originScenarioLabel && (
+          <p className="font-mono text-[10px] text-slate-500">
+            Origin: {snapshot.briefing.originScenarioLabel}
+            {snapshot.briefing.worldArchetypeLabel
+              ? ` · Archetype: ${snapshot.briefing.worldArchetypeLabel}`
+              : ''}
+          </p>
+        )}
+      </div>
+
+      {(snapshot.briefing.planetExtinctionCause ||
+        snapshot.life.totalBiologicalPopulation + snapshot.agents.totalMobilePopulation <= 0) && (
+        <div className="space-y-1 rounded border border-red-500/30 bg-red-500/5 p-2">
+          <p className="font-mono text-xs text-red-300">PLANET LIFE COLLAPSE</p>
+          {snapshot.briefing.planetExtinctionCause && (
+            <p className="font-mono text-[10px] text-red-200/80">{snapshot.briefing.planetExtinctionCause}</p>
+          )}
+          <div className="flex flex-wrap gap-1">
+            <ControlButton onClick={() => reseedLife('default')}>Reseed Life</ControlButton>
+            <ControlButton onClick={() => reseedLife('meteor')}>Meteor</ControlButton>
+            <ControlButton onClick={() => reseedLife('vent')}>Vent</ControlButton>
+            <ControlButton onClick={() => reseedLife('coastal')}>Coastal Soup</ControlButton>
+            <ControlButton onClick={() => reseedLife('alien')}>Alien Probe (speculative)</ControlButton>
+          </div>
+        </div>
+      )}
 
       <div>
         <p className="mb-1.5 font-mono text-xs text-slate-500">WORLD SIZE (circular planet)</p>

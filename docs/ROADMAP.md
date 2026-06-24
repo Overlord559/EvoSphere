@@ -159,15 +159,17 @@
 - [x] UI — Briefing succession/recovery, Species variants, Inspector cognition, disaster controls
 - [x] QA — `qa:succession`, `qa:evolution`
 
-## v0.5.4d — Population Units + Cohort Representation + Ultra Crash Fix ✅ (current)
+## v0.5.4e — Seed Diversity + Extinction Forensics + Representative Rendering Cap ✅ (current)
 
-- [x] Population units/cohorts — `populationUnits.ts`, `representationScale.ts`, `populationUnitOps.ts`
-- [x] Species-specific representation scale — microbes B, algae blooms M, plant patches, herd/pack/swarm cohorts
-- [x] Bounded simulation records (~1800 units) with deterministic merge/split
-- [x] Ultra crash fix — bounded pools, compact species occupancy, snapshot tile array reuse
-- [x] Soak HUD + Briefing — est. pop, units, tracked, rendered, compression ratio
-- [x] QA — `qa:representation` · updated `qa:stability` representation-aware gates
-- [ ] v0.6 Communication + Social Learning — **blocked** until browser soak passes
+- [x] Origin scenarios — `originScenarios.ts` (abiogenesis, panspermia, speculative seeder, random mixed)
+- [x] World archetypes — `worldArchetypes.ts` terrain/climate modifiers
+- [x] Extinction forensics — `extinctionForensics.ts`, species forensics fields, planet.extinction + reseed
+- [x] Render budget — `renderBudget.ts`, cohort glyphs, density-only overload mode
+- [x] UI — seed/origin/archetype controls, reseed actions, Soak HUD glyph caps
+- [x] QA — `qa:world-variety`, `qa:render-budget`, `qa:extinction-forensics`
+- [ ] v0.6 Communication + Social Learning — **blocked** until Ultra browser soak passes without visual overload
+
+## v0.5.4d — Population Units + Cohort Representation + Ultra Crash Fix ✅
 
 ## v0.5.4c — Population Cap Architecture + Adaptive Carrying Capacity ✅
 

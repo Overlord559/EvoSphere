@@ -5,11 +5,11 @@ import { sanitizeBodyPlan } from '../bodyPlan/bodyPlanMutation'
 import { isTileActive } from '../world/planetMask'
 
 export const MAX_EVENTS_RETAINED = 200
-export const MAX_AGENTS_DRAWN_FAR = 400
-export const MAX_AGENTS_DRAWN_MEDIUM = 600
-export const MAX_AGENTS_DRAWN_CLOSE = 800
-export const MAX_PLANT_GLYPH_TILES = 2000
-export const MAX_DETAILED_GLYPHS = 120
+export const MAX_AGENTS_DRAWN_FAR = 160
+export const MAX_AGENTS_DRAWN_MEDIUM = 200
+export const MAX_AGENTS_DRAWN_CLOSE = 280
+export const MAX_PLANT_GLYPH_TILES = 120
+export const MAX_DETAILED_GLYPHS = 48
 export const RUNAWAY_AGENT_POPULATION = 1200
 export const RUNAWAY_ORGANISM_POPULATION = 8000
 /** Max offspring created in a single life tick — ecological + safety cap. */

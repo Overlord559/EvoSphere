@@ -22,6 +22,7 @@ import type { DisasterType } from '../disasters/DisasterTypes'
 import { LifeSystem } from '../life/LifeSystem'
 import { generateWorld } from '../world/generateWorld'
 import { buildBriefing } from './briefing'
+import { findReseedSites, type ReseedMode } from '../life/lifeReseed'
 import {
   MAX_EVENTS_RETAINED,
   RUNAWAY_AGENT_POPULATION,
@@ -96,6 +97,8 @@ export class SimEngine {
     capacityPressurePct: 0,
   }
   private herbivoryPressure: number[] = []
+  private planetExtinctionEmitted = false
+  private planetExtinctionCause: string | null = null
 
   constructor(settings: SimulationSettings) {
     resetDeterministicIds()
@@ -175,6 +178,7 @@ export class SimEngine {
     if (this.tick % STABILITY_GUARD_INTERVAL === 0) {
       globalProfiler.time('stabilityGuards', () => {
         this.runStabilityGuards()
+        this.checkPlanetExtinction()
       })
     }
     this.captureSpeciesPopBefore()
@@ -482,6 +486,40 @@ export class SimEngine {
     return this.disasters.injectRandomDisaster(this.world, this.tick, (t, m) =>
       this.emitEvent(t, m),
     ) !== null
+  }
+
+  reseedLife(mode: ReseedMode = 'default'): number {
+    const sites = findReseedSites(this.world, this.settings.seed, mode)
+    const seeded = this.life.reseedAtSites(this.world, sites, this.tick, (t, m) => this.emitEvent(t, m), mode)
+    if (seeded > 0) {
+      this.agents.seedInitialAgents(this.world, (t, m) => this.emitEvent(t, m))
+      this.planetExtinctionEmitted = false
+      this.planetExtinctionCause = null
+    }
+    return seeded
+  }
+
+  getPlanetExtinctionCause(): string | null {
+    return this.planetExtinctionCause
+  }
+
+  private checkPlanetExtinction(): void {
+    const lifeSnap = this.life.getSnapshot(false, this.world)
+    const agentSnap = this.agents.getSnapshot(false)
+    const bio = lifeSnap.totalBiologicalPopulation + agentSnap.totalMobilePopulation
+    if (bio > 0) {
+      this.planetExtinctionEmitted = false
+      return
+    }
+    if (this.planetExtinctionEmitted) return
+
+    const cause =
+      this.disasters.getSnapshot().active.length > 0
+        ? 'Global die-off — active disasters depleted all refugia'
+        : 'All life lost — no surviving refugia detected'
+    this.planetExtinctionCause = cause
+    this.planetExtinctionEmitted = true
+    this.emitEvent('planet.extinction', cause)
   }
 
   getRecentActivityTileIndices(): number[] {

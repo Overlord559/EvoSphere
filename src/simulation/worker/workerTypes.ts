@@ -1,4 +1,5 @@
 import type { DeepTimeProgress, DeepTimeSummary, ThrottleStatus } from '../../types/runtime'
+import type { DisasterSettings } from '../config/disasterConfig'
 import type { SimulationSettings, SimulationSnapshot } from '../../types/simulation'
 import type { SimSpeed } from '../../types/runtime'
 import type { PerformanceReport } from '../engine/performanceProfiler'
@@ -90,6 +91,7 @@ export type MainToWorkerMessage =
   | { type: 'cancelDeepTime' }
   | { type: 'injectDisaster'; disasterType: string; severityValue: number }
   | { type: 'injectRandomDisaster' }
+  | { type: 'setDisasterSettings'; settings: Partial<DisasterSettings> }
   | { type: 'shutdown' }
   | { type: 'snapshotConsumed' }
 

@@ -8,6 +8,8 @@ import type {
   SelectedSpeciesBriefing,
 } from '../../types/runtime'
 import { formatEstimatedPopulation } from '../ecology/representationScale'
+import { formatForensicsSummary } from '../ecology/extinctionForensics'
+import { originScenarioLabel, type OriginScenarioId } from '../world/originScenarios'
 import { threatStatus } from '../species/speciesOccupancy'
 import {
   eraForTick,
@@ -138,6 +140,23 @@ export function buildBriefing(
     representationSummary = `Ecology uses ${rep.populationUnitsCount} simulation units (${rep.producerUnits} producer patches/blooms, ${rep.mobileCohorts} mobile cohorts) representing ~${formatEstimatedPopulation(totalBio)} individuals (${rep.compressionRatio}× compression).`
   }
 
+  const renderBudgetSummary = `Only ~${160} moving representatives rendered for performance (estimated pop ~${formatEstimatedPopulation(totalBio)}). Scavenger/herd cohorts continue in aggregate; visible glyphs are sampled.`
+
+  const declining = life.species.filter((s) => s.populationTrend === 'declining' && s.population > 0)
+  const compressed = life.species.filter((s) => s.hiddenAsAggregate && s.population > 0)
+  let extinctionForensicsSummary: string | null = null
+  if (compressed.length > 0) {
+    extinctionForensicsSummary = `${compressed.length} species hidden as aggregate cohorts — not extinct. ${compressed[0]?.populationChangeReason ?? ''}`
+  } else if (declining.length > 0) {
+    extinctionForensicsSummary =
+      formatForensicsSummary(declining[0]) ?? declining[0].lastCauseOfDecline ?? null
+  }
+
+  const planetExtinction = events.find((e) => e.type === 'planet.extinction')
+  const originScenarioLabelText = world.originProfile?.originScenarioId
+    ? originScenarioLabel(world.originProfile.originScenarioId as OriginScenarioId)
+    : world.originProfile?.originScenarioLabel ?? null
+
   const populationArchitecture: import('../../types/runtime').PopulationArchitectureBriefing = {
     trackedOrganisms: life.totalOrganisms,
     aggregateOrganisms: life.aggregateOrganisms,
@@ -201,6 +220,11 @@ export function buildBriefing(
     protoCognitionSummary,
     disasterPacingSummary,
     populationArchitecture,
+    renderBudgetSummary,
+    extinctionForensicsSummary,
+    planetExtinctionCause: planetExtinction?.message ?? null,
+    originScenarioLabel: originScenarioLabelText,
+    worldArchetypeLabel: world.worldArchetypeLabel ?? null,
   }
 }
 
@@ -211,7 +235,8 @@ function buildSelectedSpeciesBriefing(
   speciesPopHistory: Map<string, number>,
 ): SelectedSpeciesBriefing | null {
   const record = life.species.find((s) => s.id === speciesId)
-  if (!record || record.population <= 0) return null
+  if (!record) return null
+  if (record.population <= 0 && !record.hiddenAsAggregate) return null
 
   const occupancy = life.speciesOccupancy[speciesId]
   const prevPop = speciesPopHistory.get(speciesId) ?? record.population
@@ -246,6 +271,10 @@ function buildSelectedSpeciesBriefing(
     selectionPressures: profile?.selectionPressures ?? [],
     extinctionRisk: profile?.extinctionRisk ?? null,
     adaptationNotes: profile?.adaptationNotes ?? [],
+    lastCauseOfDecline: record.lastCauseOfDecline ?? null,
+    hiddenAsAggregate: record.hiddenAsAggregate ?? false,
+    convertedToCohort: record.convertedToCohort ?? false,
+    populationChangeReason: record.populationChangeReason ?? null,
   }
 }
 

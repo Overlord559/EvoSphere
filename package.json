@@ -17,7 +17,10 @@
     "qa:evolution": "tsx scripts/qa-evolution.ts",
     "qa:determinism": "tsx scripts/qa-determinism.ts",
     "qa:population": "tsx scripts/qa-population.ts",
-    "qa:representation": "tsx scripts/qa-representation.ts"
+    "qa:representation": "tsx scripts/qa-representation.ts",
+    "qa:world-variety": "tsx scripts/qa-world-variety.ts",
+    "qa:render-budget": "tsx scripts/qa-render-budget.ts",
+    "qa:extinction-forensics": "tsx scripts/qa-extinction-forensics.ts"
   },
   "dependencies": {
     "idb": "^8.0.3",

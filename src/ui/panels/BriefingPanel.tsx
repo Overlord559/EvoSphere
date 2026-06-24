@@ -60,6 +60,15 @@ export function BriefingPanel() {
             {selected.adaptationNotes.length > 0 && (
               <Row label="Adaptation" value={selected.adaptationNotes.join('; ')} />
             )}
+            {selected.hiddenAsAggregate && (
+              <Row label="Status" value="Hidden as aggregate cohort — not extinct" />
+            )}
+            {selected.populationChangeReason && (
+              <Row label="Population note" value={selected.populationChangeReason} />
+            )}
+            {selected.lastCauseOfDecline && (
+              <Row label="Decline cause" value={selected.lastCauseOfDecline} />
+            )}
           </dl>
         </div>
       ) : (
@@ -181,6 +190,19 @@ export function BriefingPanel() {
               <p className="pt-1 text-[10px] text-slate-400">{briefing.populationArchitecture.plateauExplanation}</p>
             )}
           </dl>
+        </div>
+      )}
+
+      {!selected && (briefing.renderBudgetSummary || briefing.extinctionForensicsSummary) && (
+        <div className="rounded border border-cyan-500/20 bg-cyan-500/5 p-2 font-mono text-xs text-cyan-100/90">
+          <p className="mb-1 text-cyan-300/80">REPRESENTATION & FORENSICS</p>
+          {briefing.renderBudgetSummary && <p className="mb-1">{briefing.renderBudgetSummary}</p>}
+          {briefing.extinctionForensicsSummary && (
+            <p className="text-amber-200/90">{briefing.extinctionForensicsSummary}</p>
+          )}
+          {briefing.planetExtinctionCause && (
+            <p className="mt-1 text-red-300">{briefing.planetExtinctionCause}</p>
+          )}
         </div>
       )}
 

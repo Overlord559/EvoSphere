@@ -22,13 +22,15 @@ Evolution and emergence are fascinating but hard to explore interactively. Most 
 4. **Browser-first** — no install, no backend, IndexedDB for persistence later
 5. **Honest scope** — no fake data, no dead controls, no spectacle without substance
 
-## v0.5.4d Population Units + Cohort Representation + Ultra Crash Fix ✅ (current)
+## v0.5.4e Seed Diversity + Extinction Forensics + Representative Rendering Cap ✅ (current)
 
-- Population units/cohorts/patches/blooms — one record represents many individuals (species-specific scale)
-- Bounded simulation records (~1800 units) with deterministic merge/split
-- Ultra browser crash root cause: unbounded aggregate pools + species occupancy JSON + per-snapshot array copies
-- Soak HUD shows est. pop vs units vs tracked vs rendered vs compression ratio
-- v0.6 Communication blocked until Ultra browser soak passes
+- Origin scenarios (abiogenesis, panspermia, speculative seeder) + world archetypes (ocean/ice/volcanic/etc.)
+- Extinction forensics on species records; aggregate compression labeled not extinct
+- Representative render cap — cohort glyphs, density-only far zoom, Soak HUD glyph metrics
+- Reseed controls when planet life collapses
+- v0.6 Communication blocked until Ultra browser soak passes without visual overload
+
+## v0.5.4d Population Units + Cohort Representation + Ultra Crash Fix ✅
 
 ## v0.5.4c Population Cap Architecture + Adaptive Carrying Capacity ✅
 

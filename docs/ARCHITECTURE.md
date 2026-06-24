@@ -437,6 +437,18 @@ Modules:
 
 Population controls: max 4 organisms/tile (tracked), max 3 agents/tile (tracked). **v0.5.4d:** biological population scales via cohort/patch/bloom units (`populationUnits.ts`); simulation record count bounded (~1800 units). Tracked/render budgets unchanged.
 
+## v0.5.4e — Seed diversity, extinction forensics, representative rendering cap
+
+| Layer | Role |
+|-------|------|
+| **Origin scenarios** | `originScenarios.ts` — abiogenesis, panspermia, speculative seeder, random mixed |
+| **World archetypes** | `worldArchetypes.ts` — sea level, moisture, vents, ridges, polar ice modifiers |
+| **Extinction forensics** | `extinctionForensics.ts` — decline causes, aggregate compression flags, planet.extinction |
+| **Render budget** | `renderBudget.ts` — sampled moving glyphs (160 default / 300 hard), density-only far zoom |
+| **Reseed** | `lifeReseed.ts` + `SimEngine.reseedLife()` — vent/meteor/coastal/alien (speculative labeled) |
+
+Headless gates: `npm run qa:world-variety` · `npm run qa:render-budget` · `npm run qa:extinction-forensics`
+
 ## v0.5.4d — Population units + cohort representation
 
 | Layer | Role |

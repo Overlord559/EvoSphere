@@ -1,5 +1,6 @@
 import type { DeepTimeProgress, DeepTimeSummary, SimSpeed, ThrottleStatus } from '../../types/runtime'
 import type { SimulationSettings, World } from '../../types/simulation'
+import type { DisasterSettings } from '../config/disasterConfig'
 import { MAX_PENDING_SNAPSHOTS, WORKER_SIMULATION_ENABLED } from '../config/simConfig'
 import { decodeSnapshot, cloneWorldFromJson } from './snapshotCodec'
 import { postToWorker, workerErrorMessage } from './workerProtocol'
@@ -244,6 +245,10 @@ export class WorkerSimulationClient {
 
   injectRandomDisaster(): void {
     this.send({ type: 'injectRandomDisaster' })
+  }
+
+  setDisasterSettings(settings: Partial<DisasterSettings>): void {
+    this.send({ type: 'setDisasterSettings', settings })
   }
 
   terminate(): void {

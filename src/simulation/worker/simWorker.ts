@@ -352,6 +352,13 @@ self.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
         break
       }
 
+      case 'setDisasterSettings': {
+        const eng = requireEngine()
+        eng.getDisasterSystem().setSettings(msg.settings)
+        postSnapshot('render', eng.getRecentActivityTileIndices())
+        break
+      }
+
       case 'shutdown':
         stopLoop()
         engine = null

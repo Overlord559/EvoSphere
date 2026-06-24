@@ -1,5 +1,5 @@
-import { nanoid } from 'nanoid'
 import type { AgentKind, MobileAgent, MobileGenome } from '../../types/agents'
+import { nextAgentId } from '../../utils/deterministicId'
 import { trophicRoleForKind } from '../../types/agents'
 import { createEmptyAgentMemory } from '../cognition/agentLearning'
 import { createRandomController } from '../cognition/NeuralController'
@@ -35,7 +35,7 @@ export function createAgent(
   const senses = deriveSensoryProfile(genome, bodyPlan)
   const rng = forkRng(controllerSeed ?? kind, `ctrl-${x}-${y}-${generation}`)
   return {
-    id: nanoid(),
+    id: nextAgentId(),
     speciesId,
     kind,
     trophicRole: trophicRoleForKind(kind),
