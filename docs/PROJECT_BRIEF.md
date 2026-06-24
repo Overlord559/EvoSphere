@@ -41,18 +41,17 @@ Not in v0.1:
 - Agent ticks
 - Persistence
 
-## v0.2 World + Viewport ✅ (current)
+## v0.3 Life ✅ (current)
 
-Delivered in this phase:
+Delivered:
 
-- Deterministic procedural world from seed
-- Pixi.js tile viewport with six overlay modes
-- SimEngine owns world, tick, and event log
-- World/Events/Inspector panels show real data
-- Tile click selection
+- Microbial energy loop and plant colonization on real tile data
+- Genome inheritance with deterministic mutation
+- Live species/biomass counts in UI
+- Life/biomass viewport overlays
 
-## Success Criteria for v0.3
+## Success Criteria for v0.4
 
-- Microbial/plant energy loop on real tile fertility
-- First agent entities with genetics
-- Species panel shows live counts (not placeholders)
+- Mobile agents with behavior and predation
+- Food web interactions between life kinds
+- No civilization or tool systems yet

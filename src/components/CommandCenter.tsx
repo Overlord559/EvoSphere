@@ -38,8 +38,8 @@ export function CommandCenter() {
 
       <footer className="border-t border-command-border px-6 py-3">
         <p className="font-mono text-xs text-slate-500">
-          v0.2 — deterministic world generation and Pixi viewport are live. Life systems
-          (microbes, plants, agents) begin in v0.3.
+          v0.3 — life systems active. Step ticks to grow populations. Animals and society
+          modules begin in later phases.
         </p>
       </footer>
     </div>

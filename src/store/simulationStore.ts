@@ -54,7 +54,7 @@ const initialEngine = createEngine(DEFAULT_SETTINGS)
 
 export const useSimulationStore = create<SimulationStore>((set, get) => ({
   activePanel: 'world',
-  phase: 'v0.2 world + viewport',
+  phase: 'v0.3 life',
   overlayMode: 'terrain',
   selectedTile: null,
   settings: { ...DEFAULT_SETTINGS },

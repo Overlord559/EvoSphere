@@ -61,13 +61,38 @@ Same `SimulationSettings` (seed, width, height) always yields identical `Tile[]`
 - **SimulationSnapshot** — tick, worldId, full world, event log
 - **EventLogEntry** — tick-indexed log row
 
-## SimEngine (v0.2)
+## SimEngine (v0.3)
 
 - Constructs a `World` on init via `generateWorld()`
-- Emits `world.generated` on creation
-- `step()` advances tick; emits `world.tick` every 50 ticks
-- `reset()` regenerates world from current or overridden settings
-- No population or species fields — intentionally absent until v0.3
+- Owns `LifeSystem` for all organism state
+- Seeds founder life at suitable tiles on init/reset
+- `step()` advances tick and runs life simulation
+- Emits biological events: `life.first`, `life.reproduce`, `life.die_off`, `life.speciation`
+- `getSnapshot()` includes full `life` snapshot for UI and viewport
+
+## Life System (v0.3)
+
+```
+LifeSystem
+  ├── organisms[] — individual life entities
+  ├── SpeciesRegistry — species counts and lineage
+  ├── tileCounts[] / tileBiomass[] — per-tile density for overlays
+  └── tick() — energy → metabolism → stress → death → reproduction
+```
+
+Modules:
+
+| Path | Role |
+|------|------|
+| `simulation/life/LifeSystem.ts` | Tick orchestration |
+| `simulation/life/createLife.ts` | Organism factories |
+| `simulation/genetics/genome.ts` | Base genomes per kind |
+| `simulation/genetics/mutation.ts` | Offspring mutation |
+| `simulation/ecology/energy.ts` | Energy gain and environmental stress |
+| `simulation/ecology/colonization.ts` | Habitat suitability and carrying capacity |
+| `simulation/species/speciesRegistry.ts` | Species tracking |
+
+Population controls: max 4 organisms/tile, max 5000 total.
 
 ## Pixi Viewport
 
@@ -76,7 +101,7 @@ Same `SimulationSettings` (seed, width, height) always yields identical `Tile[]`
 - Reads `snapshot.world` and `overlayMode` from Zustand only
 - Never mutates simulation state
 - Supports pan, zoom, tile click → `selectTile`
-- Six overlay modes: terrain, elevation, moisture, temperature, water, fertility
+- Six climate overlays plus **life** and **biomass** density overlays
 - Destroys Pixi app on unmount to avoid duplicate canvases
 
 ## Why agents start in v0.3

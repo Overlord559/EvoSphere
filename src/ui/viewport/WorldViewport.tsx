@@ -3,7 +3,8 @@ import { Application, Container, Graphics } from 'pixi.js'
 import { useSimulationStore } from '../../store/simulationStore'
 import type { OverlayMode, Tile, World } from '../../types/simulation'
 import { getTileAt } from '../../simulation/world'
-import { colorForTile, OVERLAY_MODES } from './tileColors'
+import { maxTileDensity } from '../../simulation/life/LifeSystem'
+import { colorForTile, OVERLAY_MODES, type TileColorContext } from './tileColors'
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 8
@@ -16,19 +17,43 @@ interface ViewportState {
   zoom: number
 }
 
+function buildColorContext(
+  overlay: OverlayMode,
+  tileCounts: number[],
+  tileBiomass: number[],
+): TileColorContext | undefined {
+  if (overlay !== 'life' && overlay !== 'biomass') return undefined
+  return {
+    tileIndex: 0,
+    tileCounts,
+    tileBiomass,
+    maxTileCount: maxTileDensity(tileCounts),
+    maxTileBiomass: Math.max(0.01, ...tileBiomass),
+  }
+}
+
 function drawWorld(
   container: Container,
   world: World,
   overlay: OverlayMode,
   tileSize: number,
   selectedTile: Tile | null,
+  tileCounts: number[],
+  tileBiomass: number[],
 ): void {
   container.removeChildren()
 
+  const baseContext = buildColorContext(overlay, tileCounts, tileBiomass)
+
   for (const tile of world.tiles) {
+    const idx = tile.y * world.width + tile.x
+    const context: TileColorContext | undefined = baseContext
+      ? { ...baseContext, tileIndex: idx }
+      : undefined
+
     const g = new Graphics()
     g.rect(tile.x * tileSize, tile.y * tileSize, tileSize, tileSize)
-    g.fill(colorForTile(tile, overlay))
+    g.fill(colorForTile(tile, overlay, context))
     container.addChild(g)
   }
 
@@ -59,6 +84,7 @@ export function WorldViewport() {
   const snapshot = useSimulationStore((s) => s.snapshot)
 
   const world = snapshot.world
+  const { tileCounts, tileBiomass } = snapshot.life
 
   useEffect(() => {
     const host = containerRef.current
@@ -130,7 +156,8 @@ export function WorldViewport() {
 
       const onClick = (e: MouseEvent) => {
         if (dragRef.current.moved || !app) return
-        const currentWorld = useSimulationStore.getState().snapshot.world
+        const state = useSimulationStore.getState()
+        const currentWorld = state.snapshot.world
         const rect = app.canvas.getBoundingClientRect()
         const vp = viewportRef.current
         const localX = (e.clientX - rect.left - vp.panX) / vp.zoom
@@ -155,6 +182,8 @@ export function WorldViewport() {
         current.overlayMode,
         BASE_TILE_SIZE,
         current.selectedTile,
+        current.snapshot.life.tileCounts,
+        current.snapshot.life.tileBiomass,
       )
       centerWorld(worldContainer, current.snapshot.world, host, viewportRef.current)
 
@@ -186,8 +215,16 @@ export function WorldViewport() {
   useEffect(() => {
     const worldContainer = worldContainerRef.current
     if (!worldContainer) return
-    drawWorld(worldContainer, world, overlayMode, BASE_TILE_SIZE, selectedTile)
-  }, [world, overlayMode, selectedTile])
+    drawWorld(
+      worldContainer,
+      world,
+      overlayMode,
+      BASE_TILE_SIZE,
+      selectedTile,
+      tileCounts,
+      tileBiomass,
+    )
+  }, [world, overlayMode, selectedTile, tileCounts, tileBiomass, snapshot.tick])
 
   return (
     <div className="flex min-h-[320px] flex-1 flex-col rounded-lg border border-command-border bg-command-surface/60">
@@ -215,7 +252,7 @@ export function WorldViewport() {
         aria-label="World viewport"
       />
       <p className="border-t border-command-border px-3 py-2 font-mono text-xs text-slate-500">
-        Scroll to zoom · drag to pan · click a tile to inspect
+        Scroll to zoom · drag to pan · click a tile to inspect · Life/Biomass overlays show population density
       </p>
     </div>
   )

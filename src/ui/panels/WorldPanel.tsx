@@ -18,6 +18,7 @@ export function WorldPanel() {
 
   const [seedInput, setSeedInput] = useState(settings.seed)
   const world = snapshot.world
+  const life = snapshot.life
   const stats = computeWorldStats(world)
 
   return (
@@ -60,9 +61,18 @@ export function WorldPanel() {
           <button
             type="button"
             onClick={stepSimulation}
-            className="rounded border border-command-border px-2 py-1 font-mono text-xs text-slate-400 hover:text-slate-200"
+            className="rounded border border-command-accent/30 px-2 py-1 font-mono text-xs text-command-accent hover:bg-command-accent/10"
           >
             Step tick
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              for (let i = 0; i < 10; i++) stepSimulation()
+            }}
+            className="rounded border border-command-border px-2 py-1 font-mono text-xs text-slate-400 hover:text-slate-200"
+          >
+            Step ×10
           </button>
         </div>
       </div>
@@ -72,6 +82,9 @@ export function WorldPanel() {
         <Row label="Dimensions" value={`${world.width} × ${world.height}`} />
         <Row label="Tick" value={String(snapshot.tick)} />
         <Row label="Tile count" value={String(stats.tileCount)} />
+        <Row label="Total life" value={String(life.totalOrganisms)} />
+        <Row label="Total biomass" value={life.totalBiomass.toFixed(1)} />
+        <Row label="Species" value={String(life.species.length)} />
         <Row label="Avg temperature" value={formatTemperature(stats.averageTemperature)} />
         <Row label="Avg moisture" value={formatPercent(stats.averageMoisture)} />
         <Row label="Water coverage" value={`${stats.waterCoveragePercent.toFixed(1)}%`} />
@@ -79,7 +92,7 @@ export function WorldPanel() {
 
       <div>
         <p className="mb-2 font-mono text-xs text-slate-500">TERRAIN DISTRIBUTION</p>
-        <ul className="max-h-40 space-y-1 overflow-y-auto font-mono text-xs text-slate-400">
+        <ul className="max-h-32 space-y-1 overflow-y-auto font-mono text-xs text-slate-400">
           {sortTerrainDistribution(stats.terrainDistribution).map(([terrain, count]) => (
             <li key={terrain} className="flex justify-between gap-2">
               <span>{terrainLabel(terrain)}</span>

@@ -7,13 +7,12 @@
 - [x] Shared simulation types
 - [x] Folder structure for all major systems
 - [x] Deterministic RNG utility
-- [x] SimEngine placeholder
 - [x] Command-center UI shell
 - [x] Project documentation
 
-## v0.2 World + Viewport ✅ (current)
+## v0.2 World + Viewport ✅
 
-- [x] Procedural world generator from seed (`simulation/world`)
+- [x] Procedural world generator from seed
 - [x] Tile grid with terrain types and climate attributes
 - [x] Pixi.js viewport — pan/zoom tile map with overlays
 - [x] SimEngine tick loop with world state
@@ -21,43 +20,50 @@
 - [x] Wire viewport and panels to simulation snapshots
 - [x] Tile selection and inspector panel
 
-### Intentionally not in v0.2
+## v0.3 Life ✅ (current)
 
-- Agents, microbes, plants, animals
-- Species registry or population counts
-- Society, culture, technology
+- [x] Life entity types: Microbe, PhotosyntheticMicrobe, ChemosyntheticMicrobe, Algae, PrimitivePlant
+- [x] Genome with reproduction, mutation, tolerance, and efficiency traits
+- [x] Energy gain from sunlight, water, chemicals, and fertility
+- [x] Metabolism, environmental stress, starvation, and age death
+- [x] Reproduction with mutation and speciation events
+- [x] Per-tile carrying capacity + global organism cap
+- [x] Founder seeding at hydrothermal vents, aquatic zones, fertile land
+- [x] Species panel with live counts and biomass
+- [x] Life and biomass viewport overlays
+- [x] Biological event log
+
+### Intentionally not in v0.3
+
+- Animals and predators
+- Tools, culture, civilization, spiritual systems
+- Medicine, computing, spaceflight
 - IndexedDB persistence
-- Climate simulation over time (ticks advance counter only)
+- Multi-cell body plans beyond primitive plants
 
-## v0.3 Life (next)
+## v0.4 Behavior + Ecology expansion (next)
 
-- [ ] Microbial energy loop on fertile/wet tiles
-- [ ] Plant colonization of suitable biomes
-- [ ] Agent entities with position and species id
-- [ ] Genetics: traits, inheritance, mutation (`simulation/genetics`)
-- [ ] Behavior: movement, feeding, reproduction (`simulation/behavior`)
-- [ ] Ecology: carrying capacity, predation (`simulation/ecology`)
-- [ ] Species panel shows live population data
-- [ ] Inspector panel for selected agent
+- [ ] Mobile agents with movement and local behavior
+- [ ] Predation and food webs
+- [ ] Expanded species interactions
+- [ ] Richer inspector and species lineage views
 
-## v0.4 Society
+## v0.5 Society
 
 - [ ] Culture transmission (`simulation/culture`)
 - [ ] Technology discoveries (`simulation/technology`)
 - [ ] Settlements and civilization metrics (`simulation/civilization`)
-- [ ] Events panel streams cultural and tech milestones
 
-## v0.5 Persistence + Polish
+## v0.6 Persistence + Polish
 
 - [ ] IndexedDB snapshot storage via `idb`
 - [ ] Seed export / import
 - [ ] Replay from saved snapshots
 - [ ] Performance profiling for large worlds
-- [ ] Mobile-safe viewport controls
 
 ## Out of Scope (for now)
 
 - Multiplayer / server sync
 - External AI narration or LLM-driven agents
 - 3D rendering
-- Mobile app wrappers
+- Hardcoded human endpoint species

@@ -1,3 +1,7 @@
+import type { LifeSnapshot } from './life'
+
+export type { LifeSnapshot } from './life'
+
 export type TerrainType =
   | 'deep_ocean'
   | 'ocean'
@@ -45,6 +49,7 @@ export interface SimulationSnapshot {
   worldId: string
   world: World
   events: EventLogEntry[]
+  life: LifeSnapshot
 }
 
 export interface EventLogEntry {
@@ -62,6 +67,8 @@ export type OverlayMode =
   | 'temperature'
   | 'water'
   | 'fertility'
+  | 'life'
+  | 'biomass'
 
 export interface WorldStats {
   tileCount: number

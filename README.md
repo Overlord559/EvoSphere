@@ -1,22 +1,29 @@
 # EvoSphere
 
-Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent life (v0.3+), and real-time Pixi viewport rendering.
+Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, and real-time Pixi viewport rendering.
 
-**Current phase:** v0.2 world + viewport
+**Current phase:** v0.3 life
 
 ## Status
 
-v0.2 delivers a deterministic procedural planet with climate attributes and a live Pixi.js tile map. The simulation engine owns world state and emits real events. Life systems (microbes, plants, agents) begin in v0.3.
+v0.3 adds deterministic life systems on top of the v0.2 planetary substrate:
+
+- Microbial energy loop (photosynthetic and chemosynthetic)
+- Algae and primitive plant colonization
+- Genome inheritance with mutation and speciation
+- Live species counts, biomass, and biological event log
+- Life and biomass viewport overlays
+
+Animals, predators, tools, culture, and civilization remain deferred.
 
 ## Stack
 
 - Vite + React + TypeScript
 - Tailwind CSS v4
-- Pixi.js (tile viewport)
+- Pixi.js (tile viewport + life overlays)
 - Zustand (UI + session state)
 - seedrandom (deterministic RNG)
-- nanoid (world/event IDs)
-- idb (persistence planned v0.5)
+- nanoid (entity/species/event IDs)
 
 ## Commands
 
@@ -27,11 +34,11 @@ npm run build
 npm run lint
 ```
 
-## World generation
+## Life simulation (v0.3)
 
-Same seed + same settings always produce the same tile grid. Generation uses `forkRng()` substreams for elevation, moisture, temperature, rivers, and volcanic features. No `Math.random()`.
+Organisms gain energy from tile environment (light, water, chemicals, fertility), pay metabolism costs, suffer environmental stress, reproduce into suitable neighboring tiles, mutate, and die. Per-tile carrying capacity and a global organism cap prevent runaway growth.
 
-Default world size: 96×96 tiles. Change via `SimulationSettings` in the store.
+Same world seed produces the same founder placement. Life tick RNG uses `forkRng(seed, 'life-tick-N')`.
 
 ## Documentation
 
@@ -44,5 +51,5 @@ Default world size: 96×96 tiles. Change via `SimulationSettings` in the store.
 - No backend — runs entirely in the browser
 - Deterministic simulation from seed
 - No external AI dependencies
+- Energy drives life — no magic unlocks
 - 2D viewport (Pixi.js), not 3D
-- No fake population or species data

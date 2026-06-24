@@ -1,2 +1,7 @@
 export { SimEngine } from './engine/SimEngine'
 export { generateWorld, getTileAt, computeWorldStats } from './world'
+export { LifeSystem, maxTileDensity, tileIndex } from './life/LifeSystem'
+export { createOrganism, createFounderOrganism } from './life/createLife'
+export { createBaseGenome, cloneGenome } from './genetics/genome'
+export { SpeciesRegistry } from './species/speciesRegistry'
+export { mutateGenome, shouldSpeciate } from './genetics/mutation'
