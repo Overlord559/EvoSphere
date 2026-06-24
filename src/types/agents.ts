@@ -1,4 +1,7 @@
 import type { Genome } from './life'
+import type { BodyPlan } from './bodyPlan'
+import type { SensoryInputSummary, SensoryProfile } from './senses'
+import type { SpeciesSelectionProfile } from './selection'
 
 export type AgentKind = 'SimpleGrazer' | 'SimplePredator' | 'Scavenger'
 
@@ -53,8 +56,14 @@ export interface MobileAgent {
   reproductionCooldown: number
   generation: number
   genome: MobileGenome
+  bodyPlan: BodyPlan
+  senses: SensoryProfile
   currentGoal: AgentGoal
   targetTile: { x: number; y: number } | null
+  targetReason: string
+  sensoryInput: SensoryInputSummary | null
+  habitatStress: number
+  environmentalFitness: number
   lastAction: AgentAction
   biomass: number
 }
@@ -77,6 +86,8 @@ export interface AgentSnapshot {
   foodWebLinks: FoodWebLink[]
   dominantGrazerSpeciesId: string | null
   dominantPredatorSpeciesId: string | null
+  /** v0.5 species-level selection metrics for mobile species. */
+  speciesSelectionProfiles: Record<string, SpeciesSelectionProfile>
 }
 
 export const MAX_AGENTS_PER_TILE = 3

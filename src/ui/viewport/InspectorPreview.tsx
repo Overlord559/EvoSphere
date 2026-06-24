@@ -7,6 +7,8 @@ import { drawAgentPreview } from './agentGlyphs'
 import { drawProducerPreview } from './plantGlyphs'
 import { agentVisualTraits, producerVisualTraits } from './visualGenes'
 import { lifeKindLabel } from './tileColors'
+import { bodyPlanSummary } from '../../types/bodyPlan'
+import { sensesSummary } from '../../types/senses'
 
 interface InspectorPreviewProps {
   tile: Tile
@@ -137,6 +139,10 @@ function buildTraitLines(
   const lines: string[] = []
   if (agent) {
     const t = agentVisualTraits(agent)
+    lines.push(`body: ${bodyPlanSummary(agent.bodyPlan)}`)
+    lines.push(`senses: ${sensesSummary(agent.senses)}`)
+    lines.push(`fitness ${agent.environmentalFitness.toFixed(2)} · stress ${agent.habitatStress.toFixed(2)}`)
+    lines.push(`goal ${agent.currentGoal} — ${agent.targetReason}`)
     lines.push(`speed → ${agent.genome.speed.toFixed(2)} (legs ${t.legCount})`)
     lines.push(`sensory → ${agent.genome.sensoryRange} (eyes ×${t.eyeScale.toFixed(2)})`)
     if (agent.kind === 'SimplePredator') {
@@ -146,6 +152,7 @@ function buildTraitLines(
       lines.push(`graze → ${agent.genome.grazingEfficiency.toFixed(2)}`)
     }
     lines.push(`health ${agent.health.toFixed(2)} · energy ${agent.energy.toFixed(2)}`)
+    lines.push(`last: ${agent.lastAction}`)
   } else if (organism) {
     const t = producerVisualTraits(organism.kind, organism.genome, organism.biomass, 0.5, 'grassland')
     lines.push(`spread → ${organism.genome.spreadRate.toFixed(2)}`)

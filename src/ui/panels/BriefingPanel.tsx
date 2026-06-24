@@ -43,6 +43,22 @@ export function BriefingPanel() {
             {selected.predatorLinks.length > 0 && (
               <Row label="Predators" value={selected.predatorLinks.join(', ')} />
             )}
+            {selected.bodyPlanSummary && (
+              <Row label="Body plan" value={selected.bodyPlanSummary} />
+            )}
+            {selected.sensesSummary && <Row label="Senses" value={selected.sensesSummary} />}
+            {selected.environmentalFitnessScore != null && (
+              <Row label="Fitness" value={selected.environmentalFitnessScore.toFixed(2)} />
+            )}
+            {selected.selectionPressures.length > 0 && (
+              <Row label="Selection pressure" value={selected.selectionPressures.join(', ')} />
+            )}
+            {selected.extinctionRisk != null && (
+              <Row label="Extinction risk" value={selected.extinctionRisk.toFixed(2)} />
+            )}
+            {selected.adaptationNotes.length > 0 && (
+              <Row label="Adaptation" value={selected.adaptationNotes.join('; ')} />
+            )}
           </dl>
         </div>
       ) : (
@@ -81,6 +97,22 @@ export function BriefingPanel() {
                     Focus region
                   </button>
                 )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {!selected && briefing.selectionNarratives.length > 0 && (
+        <div>
+          <p className="mb-2 font-mono text-xs text-slate-500">ENVIRONMENTAL SELECTION</p>
+          <ul className="space-y-2">
+            {briefing.selectionNarratives.map((line) => (
+              <li
+                key={line}
+                className="rounded border border-emerald-500/20 bg-emerald-500/5 p-2 font-mono text-xs text-emerald-100"
+              >
+                {line}
               </li>
             ))}
           </ul>

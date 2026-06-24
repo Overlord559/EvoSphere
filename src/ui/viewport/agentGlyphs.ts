@@ -120,6 +120,11 @@ function drawCreatureBody(
   g.circle(cx + hx, cy + hy, headR)
   g.fill({ color: adjustColor(color, 15, 10, 5), alpha })
 
+  if (agent.bodyPlan.armorLevel > 0.55 || agent.bodyPlan.bodyCovering === 'shell') {
+    g.circle(cx, cy, bodyW * 0.62)
+    g.stroke({ width: bodyW * 0.08, color: adjustColor(color, -30, -25, -20), alpha: alpha * 0.85 })
+  }
+
   if (detail !== 'far') {
     const eyeR = bodyW * traits.eyeScale
     const [ex, ey] = rotatePoint(bodyW * 0.65, -headR * 0.35, angle)
@@ -137,12 +142,13 @@ function drawCreatureBody(
 
   const mouthW = bodyW * traits.mouthScale
   const [mx, my] = rotatePoint(bodyW * 0.75, 0, angle)
-  if (isPredator) {
+  const mouth = agent.bodyPlan.mouthType
+  if (mouth === 'jaw' || mouth === 'mandible' || isPredator) {
     g.moveTo(cx + mx - mouthW * 0.5, cy + my)
     g.lineTo(cx + mx + mouthW * 0.3, cy + my - mouthW * 0.3)
     g.lineTo(cx + mx + mouthW * 0.3, cy + my + mouthW * 0.3)
     g.fill({ color: 0x331111, alpha: 0.85 })
-  } else if (isScavenger) {
+  } else if (mouth === 'sucker' || mouth === 'proboscis' || isScavenger) {
     g.moveTo(cx + mx - mouthW * 0.4, cy + my - mouthW * 0.2)
     g.lineTo(cx + mx + mouthW * 0.5, cy + my)
     g.lineTo(cx + mx - mouthW * 0.4, cy + my + mouthW * 0.2)
@@ -164,7 +170,7 @@ function drawCreatureBody(
   if (detail === 'close') {
     drawAppendages(g, cx, cy, agent, traits, bodyW, angle, color, alpha)
   } else if (detail === 'medium') {
-    drawLegs(g, cx, cy, traits, bodyW, bodyH, angle, color, alpha, Math.min(4, traits.legCount))
+    drawLegs(g, cx, cy, traits, bodyW, bodyH, angle, color, alpha, Math.min(4, traits.legCount), agent.bodyPlan.locomotionType)
   }
 }
 
@@ -179,14 +185,27 @@ function drawLegs(
   color: number,
   alpha: number,
   count: number,
+  locomotion: MobileAgent['bodyPlan']['locomotionType'] = 'legs',
 ): void {
-  if (traits.finEmphasis) {
+  if (traits.finEmphasis || locomotion === 'fins') {
     for (let i = -1; i <= 1; i += 2) {
       const [fx, fy] = rotatePoint(0, i * bodyH * 0.4, angle)
       const finTip = rotatePoint(bodyW * 0.35 * i, 0, angle)
       g.moveTo(cx + fx, cy + fy)
       g.lineTo(cx + finTip[0], cy + finTip[1])
       g.stroke({ width: bodyW * 0.1, color, alpha: alpha * 0.7 })
+    }
+    return
+  }
+
+  if (locomotion === 'tentacles') {
+    for (let i = 0; i < count; i++) {
+      const t = count === 1 ? 0 : (i / (count - 1)) * 2 - 1
+      const [lx, ly] = rotatePoint(bodyW * 0.35, bodyH * 0.5 * t, angle)
+      const wave = rotatePoint(bodyW * 0.55, bodyH * 0.7 * t, angle)
+      g.moveTo(cx + lx, cy + ly)
+      g.quadraticCurveTo(cx + wave[0], cy + wave[1], cx + wave[0] + bodyW * 0.2, cy + wave[1] + bodyW * 0.15 * t)
+      g.stroke({ width: bodyW * 0.07, color, alpha: alpha * 0.85 })
     }
     return
   }
@@ -213,7 +232,7 @@ function drawAppendages(
   color: number,
   alpha: number,
 ): void {
-  drawLegs(g, cx, cy, traits, bodyW, bodyW * 0.8, angle, color, alpha, traits.legCount)
+  drawLegs(g, cx, cy, traits, bodyW, bodyW * 0.8, angle, color, alpha, traits.legCount, _agent.bodyPlan.locomotionType)
 
   if (traits.antennaCount > 0) {
     for (let i = 0; i < traits.antennaCount; i++) {

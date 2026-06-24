@@ -13,6 +13,7 @@ export function SpeciesPanel() {
   const focusSpecies = useSimulationStore((s) => s.focusSpecies)
   const popHistory = useSimulationStore((s) => s.snapshot.briefing)
   const agents = useSimulationStore((s) => s.snapshot.agents)
+  const selectionProfiles = agents.speciesSelectionProfiles
 
   const aliveSpecies = life.species.filter((s) => s.population > 0)
   const selectedRecord = selectedSpeciesId
@@ -86,6 +87,26 @@ export function SpeciesPanel() {
                 )}
               </>
             )}
+            {selectionProfiles[selectedRecord.id] && (
+              <>
+                <Row label="Body plan" value={selectionProfiles[selectedRecord.id].bodyPlanSummary} />
+                <Row label="Senses" value={selectionProfiles[selectedRecord.id].sensesSummary} />
+                <Row
+                  label="Fitness"
+                  value={selectionProfiles[selectedRecord.id].environmentalFitnessScore.toFixed(2)}
+                />
+                <Row
+                  label="Selection pressure"
+                  value={
+                    selectionProfiles[selectedRecord.id].selectionPressures.join(', ') || '—'
+                  }
+                />
+                <Row
+                  label="Extinction risk"
+                  value={selectionProfiles[selectedRecord.id].extinctionRisk.toFixed(2)}
+                />
+              </>
+            )}
           </dl>
         </div>
       )}
@@ -131,6 +152,11 @@ export function SpeciesPanel() {
                       </span>
                       <span>{occupancy?.occupiedTileCount ?? 0} tiles</span>
                     </div>
+                    {selectionProfiles[species.id] && (
+                      <p className="mt-1 truncate text-[10px] text-slate-500">
+                        {selectionProfiles[species.id].bodyPlanSummary}
+                      </p>
+                    )}
                   </button>
                   <div className="mt-2 flex gap-1">
                     <MiniButton onClick={() => selectSpecies(species.id)} active={isSelected}>

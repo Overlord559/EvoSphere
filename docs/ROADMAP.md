@@ -92,11 +92,22 @@
 - [x] Throttled agent + food-web milestone events
 - [x] Deep-time summary includes grazer/predator deltas, predation, starvation counts
 
-## v0.5 Body Plans + Senses + Environmental Selection (next)
+## v0.5 Body Plans + Senses + Environmental Selection ✅ (current)
 
-- [ ] Richer agent senses and body-plan variation
-- [ ] Stronger environmental selection pressure
-- [ ] Proto-behavior expansion depending on v0.4 outcomes
+- [x] Body plan model on mobile agents (symmetry, locomotion, mouth, armor, sensors, adaptations)
+- [x] Body plan genetics — derived from genome, slow mutation on reproduction
+- [x] Sensory profiles — vision/smell/vibration/heat/water/pressure ranges affect behavior
+- [x] Environmental fitness — terrain/climate/biomass/predation/crowding affect movement, energy, reproduction, stress
+- [x] Species selection metrics — fitness, habitat, body plan, senses, pressures in Species + Briefing panels
+- [x] Visual integration — agent glyphs reflect body plan traits
+- [x] Behavior integration — utility goals use senses + fitness + predator pressure
+- [x] Stability QA gate script — Standard 192×192 all speed modes + deep time smoke test
+
+## v0.6 Communication + Memory + Social Behavior (next)
+
+- [ ] Proto-communication signals between agents
+- [ ] Short-term memory / trail following (deterministic)
+- [ ] Simple flock/pack/herd grouping
 - [ ] Culture / technology / civilization remain deferred
 
 ## v0.6 Society (deferred)

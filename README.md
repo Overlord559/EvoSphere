@@ -2,7 +2,7 @@
 
 Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, mobile agents with predation, circular planet viewport, and Spore-inspired procedural Pixi rendering.
 
-**Current phase:** v0.4.3 Stability + Bigger Circular World + Zoom Inspection
+**Current phase:** v0.5 Body Plans + Senses + Environmental Selection
 
 ## Status
 
@@ -16,6 +16,15 @@ v0.4.3 engine stability + planet topology:
 - **Zoom / focus inspection** — click tile or agent, Focus species, Inspector/Briefing zoom-to controls
 - **Stability guards** — max ticks/ms per frame, event caps, invalid entity quarantine, throttle warnings
 - **Performance HUD** — FPS, sim ms/frame, drawn counts, LOD, throttle status (Debug / Advanced)
+
+v0.5 body plans + senses + environmental selection:
+
+- **Body plan model** — symmetry, locomotion, limbs, mouth, armor, sensors, habitat adaptations (deterministic from genome)
+- **Sensory profiles** — vision, smell, vibration, heat, water/pressure — affect hunting, grazing, flee, migration
+- **Environmental fitness** — temperature, moisture, terrain, biomass, predator pressure, crowding affect survival and reproduction
+- **Species selection metrics** — body plan summary, senses, dominant habitat, fitness, selection pressures in Species/Briefing panels
+- **Visual integration** — glyphs reflect body plan (fins, tentacles, jaws, armor shell, antennae)
+- **Stability QA gate** — `npx tsx scripts/qa-stability.ts` (Standard 192×192, all speed modes)
 
 v0.4.2 living simulation UX:
 

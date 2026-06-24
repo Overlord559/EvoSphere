@@ -85,9 +85,12 @@ export function canAgentTraverseTile(
   if (!tile) return false
 
   if (tile.terrain === 'deep_ocean' && agent.kind !== 'Scavenger') {
-    return agent.genome.waterTolerance > 0.75
+    const aquatic = agent.bodyPlan?.aquaticAdaptation ?? agent.genome.waterTolerance
+    return aquatic > 0.55 || agent.bodyPlan?.locomotionType === 'fins'
   }
-  if (tile.terrain === 'mountain' && agent.genome.stamina < 0.35) return false
+  if (tile.terrain === 'mountain' && agent.genome.stamina < 0.35) {
+    return (agent.bodyPlan?.climbingAdaptation ?? 0) > 0.45
+  }
   if (tile.terrain === 'volcanic' && agent.genome.heatTolerance < 0.45) return false
 
   return true
@@ -99,7 +102,9 @@ export function pickGrazeTargetTile(
   tileBiomass: number[],
   rng: Rng,
 ): { x: number; y: number; biomass: number } | null {
-  const range = Math.max(1, Math.round(agent.genome.sensoryRange))
+  const smellReach = Math.ceil(agent.senses?.smellRange ?? agent.genome.sensoryRange)
+  const visualReach = Math.ceil(agent.senses?.visualRange ?? agent.genome.sensoryRange)
+  const range = Math.max(smellReach, visualReach, 1)
   const candidates: { x: number; y: number; biomass: number; score: number }[] = []
 
   for (let dy = -range; dy <= range; dy++) {

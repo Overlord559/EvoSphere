@@ -4,7 +4,10 @@ import type { Rng } from '../../utils/rng'
 import { neighborOffsets } from '../ecology/colonization'
 import { canAgentTraverseTile, pickGrazeTargetTile } from '../ecology/herbivory'
 import { findPreyInRange, pickHuntTargetTile } from '../ecology/predation'
+import { computeTileFitness } from '../ecology/environmentalFitness'
+import { effectiveSenseRange } from '../senses/SenseSystem'
 import { getTileAt } from '../world/generateWorld'
+import { isTileActive } from '../world/planetMask'
 
 export function chooseAgentGoal(
   agent: MobileAgent,
@@ -13,20 +16,26 @@ export function chooseAgentGoal(
   tileAgentIndex: Map<number, MobileAgent[]>,
   rng: Rng,
 ): AgentGoal {
+  const input = agent.sensoryInput
+  const predatorNear = (input?.predatorPressure ?? 0) > 0.35
+
   if (agent.health < 0.35 || agent.energy < 0.15) return 'rest'
+  if (agent.habitatStress > 0.65 && agent.trophicRole !== 'predator') return 'migrate'
+
   if (agent.hunger > 0.75) {
     if (agent.trophicRole === 'predator') return 'hunt'
     if (agent.trophicRole === 'grazer' || agent.trophicRole === 'scavenger') return 'find_food'
   }
   if (agent.hunger > 0.55 && agent.trophicRole === 'grazer') return 'graze'
 
-  const nearbyPredators = countNearbyPredators(agent, tileAgentIndex, world.width)
-  if (nearbyPredators > 0 && agent.genome.fearfulness > 0.4 && agent.trophicRole === 'grazer') {
+  if (predatorNear && agent.genome.fearfulness > 0.35 && agent.trophicRole === 'grazer') {
     return agent.genome.fearfulness > 0.55 ? 'flee' : 'migrate'
   }
 
   if (agent.energy >= 0.72 && agent.hunger < 0.4 && agent.reproductionCooldown <= 0) {
-    return rng() > 0.7 ? 'seek_mate' : 'wander'
+    if (agent.environmentalFitness > 0.55) {
+      return rng() > 0.7 ? 'seek_mate' : 'wander'
+    }
   }
 
   if (agent.hunger > 0.5 && agent.trophicRole !== 'predator') {
@@ -35,31 +44,43 @@ export function chooseAgentGoal(
   }
 
   if (agent.trophicRole === 'predator' && agent.hunger > 0.45) {
-    const prey = findPreyInRange(agent, [], tileAgentIndex, world.width)
+    const prey = findPreyInRange(agent, [], tileAgentIndex, world.width, agent.senses.visualRange)
     if (!prey) return 'migrate'
     return 'hunt'
+  }
+
+  if ((input?.nearestFoodBiomass ?? 0) < 0.1 && agent.senses.visualRange < 2.5) {
+    return rng() > 0.4 ? 'wander' : 'migrate'
   }
 
   return rng() > 0.65 ? 'wander' : 'rest'
 }
 
-function countNearbyPredators(
-  agent: MobileAgent,
-  tileAgentIndex: Map<number, MobileAgent[]>,
-  worldWidth: number,
-): number {
-  let count = 0
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
-      const idx = (agent.y + dy) * worldWidth + (agent.x + dx)
-      const onTile = tileAgentIndex.get(idx)
-      if (!onTile) continue
-      for (const other of onTile) {
-        if (other.id !== agent.id && other.trophicRole === 'predator') count += 1
-      }
-    }
+export function goalTargetReason(agent: MobileAgent, goal: AgentGoal): string {
+  const input = agent.sensoryInput
+  switch (goal) {
+    case 'hunt':
+      return input?.nearestPreyDistance != null
+        ? `prey sensed at d${input.nearestPreyDistance}`
+        : 'seeking prey'
+    case 'find_food':
+    case 'graze':
+      return input && input.nearestFoodBiomass > 0.2
+        ? `biomass ${input.nearestFoodBiomass.toFixed(1)} in range`
+        : 'seeking biomass'
+    case 'flee':
+      return input && input.predatorPressure > 0.3 ? 'predator pressure' : 'threat avoidance'
+    case 'migrate':
+      return agent.habitatStress > 0.5 ? 'habitat stress' : 'better forage'
+    case 'seek_mate':
+      return 'fit habitat reproduction'
+    case 'rest':
+      return agent.energy < 0.2 ? 'low energy' : 'recovering'
+    default:
+      return input?.habitatQuality != null && input.habitatQuality < 0.4
+        ? 'poor senses / wandering'
+        : 'exploring'
   }
-  return count
 }
 
 export function pickMoveTarget(
@@ -77,7 +98,7 @@ export function pickMoveTarget(
       return target ? { x: target.x, y: target.y } : pickMigrationTarget(agent, world, tileBiomass, rng)
     }
     case 'hunt': {
-      const prey = findPreyInRange(agent, [], tileAgentIndex, world.width)
+      const prey = findPreyInRange(agent, [], tileAgentIndex, world.width, agent.senses.visualRange)
       return prey ? pickHuntTargetTile(agent, prey) : pickMigrationTarget(agent, world, tileBiomass, rng)
     }
     case 'flee':
@@ -105,12 +126,14 @@ export function stepTowardTarget(
     return { x: agent.x, y: agent.y, moved: false }
   }
 
+  const maxPerTile = agent.bodyPlan.locomotionType === 'crawling' ? 4 : 3
+
   const candidates = neighborOffsets()
     .map(([dx, dy]: [number, number]) => ({ x: agent.x + dx, y: agent.y + dy }))
     .filter(({ x, y }: { x: number; y: number }) => {
       if (!canAgentTraverseTile(agent, world, x, y)) return false
       const idx = y * world.width + x
-      if ((tileAgentCounts[idx] ?? 0) >= 3) return false
+      if ((tileAgentCounts[idx] ?? 0) >= maxPerTile) return false
       return true
     })
 
@@ -149,18 +172,21 @@ function pickMigrationTarget(
   rng: Rng,
 ): { x: number; y: number } {
   let best = { x: agent.x, y: agent.y, score: -1 }
-  const range = 4 + Math.round(agent.genome.sensoryRange)
+  const range = Math.min(6, Math.ceil(effectiveSenseRange(agent.senses) + 1))
 
   for (let dy = -range; dy <= range; dy++) {
     for (let dx = -range; dx <= range; dx++) {
       const x = agent.x + dx
       const y = agent.y + dy
+      if (!isTileActive(world, x, y)) continue
       if (!canAgentTraverseTile(agent, world, x, y)) continue
       const idx = y * world.width + x
       const biomass = tileBiomass[idx] ?? 0
       const tile = getTileAt(world, x, y)
-      const fertility = tile?.soilFertility ?? 0
-      const score = biomass * 1.2 + fertility * 0.4 - (Math.abs(dx) + Math.abs(dy)) * 0.05
+      if (!tile) continue
+      const fitness = computeTileFitness(agent, tile, biomass, 0)
+      const distPenalty = (Math.abs(dx) + Math.abs(dy)) * 0.04
+      const score = fitness * 1.4 + biomass * 0.8 + tile.soilFertility * 0.3 - distPenalty
       if (score > best.score) best = { x, y, score }
     }
   }
@@ -175,12 +201,13 @@ function pickFleeTarget(
   world: World,
   rng: Rng,
 ): { x: number; y: number } {
+  const senseRange = Math.ceil(agent.senses.vibrationRange + 1)
   let threatX = agent.x
   let threatY = agent.y
   let threats = 0
 
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
+  for (let dy = -senseRange; dy <= senseRange; dy++) {
+    for (let dx = -senseRange; dx <= senseRange; dx++) {
       const idx = (agent.y + dy) * world.width + (agent.x + dx)
       const onTile = tileAgentIndex.get(idx)
       if (!onTile) continue

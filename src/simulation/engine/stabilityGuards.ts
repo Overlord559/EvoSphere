@@ -1,6 +1,7 @@
 import type { MobileAgent } from '../../types/agents'
 import type { LifeOrganism } from '../../types/life'
 import type { World } from '../../types/simulation'
+import { sanitizeBodyPlan } from '../bodyPlan/bodyPlanMutation'
 import { isTileActive } from '../world/planetMask'
 
 export const MAX_EVENTS_RETAINED = 200
@@ -29,6 +30,10 @@ export function sanitizeAgent(agent: MobileAgent, world: World): string | null {
     return 'out of bounds'
   }
   if (!isTileActive(world, agent.x, agent.y)) return 'inactive tile'
+  if (!agent.bodyPlan || !agent.senses) return 'missing body/sense profile'
+  if (!isFiniteNumber(agent.environmentalFitness) || !isFiniteNumber(agent.habitatStress)) {
+    return 'invalid fitness state'
+  }
   return null
 }
 
@@ -46,8 +51,11 @@ export function clampAgentVitals(agent: MobileAgent): void {
   agent.energy = Math.max(0, Math.min(1, agent.energy))
   agent.health = Math.max(0, Math.min(1, agent.health))
   agent.hunger = Math.max(0, Math.min(1, agent.hunger))
+  agent.habitatStress = Math.max(0, Math.min(1, agent.habitatStress))
+  agent.environmentalFitness = Math.max(0, Math.min(1, agent.environmentalFitness))
   agent.x = Math.round(agent.x)
   agent.y = Math.round(agent.y)
+  if (agent.bodyPlan) agent.bodyPlan = sanitizeBodyPlan(agent.bodyPlan)
 }
 
 export function clampOrganismVitals(organism: LifeOrganism): void {

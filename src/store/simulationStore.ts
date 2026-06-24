@@ -164,7 +164,7 @@ const initialVisualStates = syncVisualStates(initialSnapshot.agents.agents, new 
 
 export const useSimulationStore = create<SimulationStore>((set, get) => ({
   activePanel: 'briefing',
-  phase: 'v0.4.3 stability + circular world',
+  phase: 'v0.5 body plans + senses + selection',
   overlayMode: 'terrain',
   visualMode: 'organic',
   selectedTile: null,

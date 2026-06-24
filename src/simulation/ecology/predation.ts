@@ -25,7 +25,8 @@ export function resolvePredation(
     predator.genome.huntingEfficiency * 0.45 +
     predator.genome.aggression * 0.25 +
     predator.energy * 0.15 +
-    predator.genome.speed * 0.1
+    predator.genome.speed * 0.1 +
+    (predator.senses?.visualRange ?? 2) * 0.04
   const successChance = Math.max(0.08, Math.min(0.92, huntPower - preyEscape + 0.35))
 
   if (rng() > successChance) {
@@ -55,8 +56,9 @@ export function findPreyInRange(
   _agents: MobileAgent[],
   tileAgentIndex: Map<number, MobileAgent[]>,
   worldWidth: number,
+  visualRange?: number,
 ): MobileAgent | null {
-  const range = Math.max(1, Math.round(predator.genome.sensoryRange))
+  const range = Math.max(1, Math.round(visualRange ?? predator.senses?.visualRange ?? predator.genome.sensoryRange))
   const candidates: MobileAgent[] = []
 
   for (let dy = -range; dy <= range; dy++) {

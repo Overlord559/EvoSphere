@@ -9,6 +9,8 @@ import {
 } from '../species/speciationConfig'
 import { cloneGenome } from './genome'
 import { cloneMobileGenome } from './agentGenome'
+import { mutateBodyPlan, sanitizeBodyPlan } from '../bodyPlan/bodyPlanMutation'
+import { deriveBodyPlan } from '../bodyPlan/bodyPlanGenome'
 
 const GENOME_KEYS: (keyof Genome)[] = [
   'reproductionRate',
@@ -81,6 +83,22 @@ export function mutateMobileGenome(parent: MobileGenome, rng: Rng): MobileGenome
 
   child.mutationRate = clamp01(parent.mutationRate + randomFloat(rng, -0.01, 0.015))
   return child
+}
+
+/** Mutate genome and body plan together for offspring. */
+export function mutateMobileAgentTraits(
+  parentGenome: MobileGenome,
+  parentBodyPlan: import('../../types/bodyPlan').BodyPlan,
+  kind: import('../../types/agents').AgentKind,
+  rng: Rng,
+): { genome: MobileGenome; bodyPlan: import('../../types/bodyPlan').BodyPlan } {
+  const genome = mutateMobileGenome(parentGenome, rng)
+  let bodyPlan = mutateBodyPlan(parentBodyPlan, rng, parentGenome.mutationRate)
+  bodyPlan = sanitizeBodyPlan(bodyPlan)
+  if (rng() > 0.65) {
+    bodyPlan = sanitizeBodyPlan(deriveBodyPlan(kind, genome))
+  }
+  return { genome, bodyPlan }
 }
 
 export function shouldSpeciate(

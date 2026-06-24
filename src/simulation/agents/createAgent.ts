@@ -1,7 +1,10 @@
 import { nanoid } from 'nanoid'
 import type { AgentKind, MobileAgent, MobileGenome } from '../../types/agents'
 import { trophicRoleForKind } from '../../types/agents'
+import { deriveBodyPlan } from '../bodyPlan/bodyPlanGenome'
+import { sanitizeBodyPlan } from '../bodyPlan/bodyPlanMutation'
 import { createBaseMobileGenome } from '../genetics/agentGenome'
+import { deriveSensoryProfile } from '../senses/SenseSystem'
 
 function baseBiomass(kind: AgentKind): number {
   switch (kind) {
@@ -21,8 +24,11 @@ export function createAgent(
   y: number,
   genome: MobileGenome,
   generation = 0,
+  bodyPlanOverride?: import('../../types/bodyPlan').BodyPlan,
 ): MobileAgent {
   const maxAge = Math.round(genome.lifespan * (0.85 + generation * 0.015))
+  const bodyPlan = sanitizeBodyPlan(bodyPlanOverride ?? deriveBodyPlan(kind, genome))
+  const senses = deriveSensoryProfile(genome, bodyPlan)
   return {
     id: nanoid(),
     speciesId,
@@ -38,8 +44,14 @@ export function createAgent(
     reproductionCooldown: Math.round(22 / Math.max(0.12, genome.reproductionRate)),
     generation,
     genome: { ...genome },
+    bodyPlan,
+    senses,
     currentGoal: 'wander',
     targetTile: null,
+    targetReason: 'idle',
+    sensoryInput: null,
+    habitatStress: 0,
+    environmentalFitness: 0.5,
     lastAction: 'idle',
     biomass: baseBiomass(kind) * (0.85 + genome.energyEfficiency * 0.35),
   }

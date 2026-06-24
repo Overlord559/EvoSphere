@@ -22,7 +22,19 @@ Evolution and emergence are fascinating but hard to explore interactively. Most 
 4. **Browser-first** — no install, no backend, IndexedDB for persistence later
 5. **Honest scope** — no fake data, no dead controls, no spectacle without substance
 
-## v0.4.3 Stability + Bigger Circular World + Zoom Inspection ✅ (current)
+## v0.5 Body Plans + Senses + Environmental Selection ✅ (current)
+
+Delivered:
+
+- Body plan model on mobile agents — symmetry, locomotion, mouth, armor, sensors, habitat adaptations
+- Body plan genetics — genome-derived with slow mutation; passed to offspring
+- Sensory profiles — vision, smell, vibration, heat, water/pressure; affect hunt/graze/flee/migrate
+- Environmental fitness — terrain/climate/biomass/predation/crowding affect survival and reproduction
+- Species selection metrics in Species + Briefing panels (real state, no fake narrative)
+- Visual glyphs reflect body-plan traits (fins, tentacles, jaws, shell, antennae)
+- Headless QA gate: `npx tsx scripts/qa-stability.ts`
+
+## v0.4.3 Stability + Bigger Circular World + Zoom Inspection ✅
 
 Delivered:
 

@@ -77,6 +77,8 @@ export interface BriefingSnapshot {
   recentFoodWebEvent: string | null
   /** Natural-language developments derived from live simulation state. */
   latestDevelopments: LatestDevelopment[]
+  /** v0.5 environmental selection narratives from real species metrics. */
+  selectionNarratives: string[]
 }
 
 export interface SelectedSpeciesBriefing {
@@ -95,6 +97,12 @@ export interface SelectedSpeciesBriefing {
   popDelta: number
   predatorLinks: string[]
   preyLinks: string[]
+  bodyPlanSummary: string | null
+  sensesSummary: string | null
+  environmentalFitnessScore: number | null
+  selectionPressures: string[]
+  extinctionRisk: number | null
+  adaptationNotes: string[]
 }
 
 export interface SimulationSnapshot {

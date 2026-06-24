@@ -161,8 +161,10 @@ export function InspectorPanel() {
                         className="w-full text-left"
                         onClick={() => selectSpecies(agent.speciesId)}
                       >
-                        {lifeKindLabel(agent.kind)} · {agent.trophicRole} · goal {agent.currentGoal} · E{' '}
-                        {agent.energy.toFixed(2)} · H {agent.health.toFixed(2)}
+                        {lifeKindLabel(agent.kind)} · {agent.trophicRole} · goal {agent.currentGoal}
+                        {' · '}
+                        {agent.targetReason} · E {agent.energy.toFixed(2)} · fit{' '}
+                        {agent.environmentalFitness.toFixed(2)}
                       </button>
                     </li>
                   ))}

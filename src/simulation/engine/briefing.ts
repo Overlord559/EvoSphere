@@ -13,6 +13,7 @@ import {
   tickToYears,
 } from '../engine/simTime'
 import { buildLatestDevelopments } from '../engine/developments'
+import { buildSelectionNarratives } from '../species/speciesSelectionMetrics'
 import type { World } from '../../types/simulation'
 
 export function buildBriefing(
@@ -61,7 +62,7 @@ export function buildBriefing(
   )
 
   const selectedSpecies = selectedSpeciesId
-    ? buildSelectedSpeciesBriefing(selectedSpeciesId, life, speciesPopHistory)
+    ? buildSelectedSpeciesBriefing(selectedSpeciesId, life, agents, speciesPopHistory)
     : null
 
   const dominantGrazer = life.species.find((s) => s.id === agents.dominantGrazerSpeciesId)
@@ -107,12 +108,14 @@ export function buildBriefing(
       selectedSpeciesId,
       speciesPopHistory,
     ),
+    selectionNarratives: buildSelectionNarratives(agents.speciesSelectionProfiles, life.species),
   }
 }
 
 function buildSelectedSpeciesBriefing(
   speciesId: string,
   life: LifeSnapshot,
+  agents: AgentSnapshot,
   speciesPopHistory: Map<string, number>,
 ): SelectedSpeciesBriefing | null {
   const record = life.species.find((s) => s.id === speciesId)
@@ -120,6 +123,7 @@ function buildSelectedSpeciesBriefing(
 
   const occupancy = life.speciesOccupancy[speciesId]
   const prevPop = speciesPopHistory.get(speciesId) ?? record.population
+  const profile = agents.speciesSelectionProfiles[speciesId]
 
   const predatorNames = record.predatorSpeciesIds
     .map((id) => life.species.find((s) => s.id === id)?.name)
@@ -144,6 +148,12 @@ function buildSelectedSpeciesBriefing(
     popDelta: record.population - prevPop,
     predatorLinks: predatorNames,
     preyLinks: preyNames,
+    bodyPlanSummary: profile?.bodyPlanSummary ?? null,
+    sensesSummary: profile?.sensesSummary ?? null,
+    environmentalFitnessScore: profile?.environmentalFitnessScore ?? null,
+    selectionPressures: profile?.selectionPressures ?? [],
+    extinctionRisk: profile?.extinctionRisk ?? null,
+    adaptationNotes: profile?.adaptationNotes ?? [],
   }
 }
 

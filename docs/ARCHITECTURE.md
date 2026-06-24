@@ -129,6 +129,28 @@ Throttle states: `ok` · `catching_up` · `throttled` · `overloaded` — surfac
 - Draw caps: agents 400–800, plant tiles 2000, detailed glyphs 120
 - Reused Graphics containers per layer (not per-tile objects)
 
+## Body Plans + Senses + Selection (v0.5)
+
+```
+MobileAgent
+  ├── genome (MobileGenome)
+  ├── bodyPlan (BodyPlan) — derived + slowly mutated
+  ├── senses (SensoryProfile) — derived from genome + body plan
+  ├── sensoryInput — bounded local scan each tick
+  └── environmentalFitness / habitatStress — from tile + ecology
+```
+
+| Module | Role |
+|--------|------|
+| `bodyPlan/bodyPlanGenome.ts` | Derive body plan from genome + archetype |
+| `bodyPlan/bodyPlanMutation.ts` | Slow body-plan mutation on reproduction |
+| `senses/SenseSystem.ts` | Sensory range derivation |
+| `behavior/sensoryTargets.ts` | Local O(range²) environment scan |
+| `ecology/environmentalFitness.ts` | Tile fitness, movement/reproduction multipliers |
+| `species/speciesSelectionMetrics.ts` | Aggregate species selection profiles + narratives |
+
+Behavior uses utility scoring (not complex AI): goals from hunger, senses, fitness, predator pressure.
+
 ## Runtime Loop (v0.4.2 — superseded)
 
 ## Simulated Time (v0.4.2)

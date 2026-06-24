@@ -16,13 +16,18 @@ import type { Rng } from '../../utils/rng'
 import { forkRng } from '../../utils/rng'
 import {
   chooseAgentGoal,
+  goalTargetReason,
   pickMoveTarget,
   stepTowardTarget,
 } from '../behavior/mobileBehavior'
+import { scanLocalEnvironment } from '../behavior/sensoryTargets'
 import { FoodWebTracker, syncSpeciesFoodWeb } from '../ecology/foodWeb'
 import { computeGrazeEnergyGain, movementEnergyCost, terrainMovementCost } from '../ecology/herbivory'
+import { computeAgentFitness } from '../ecology/environmentalFitness'
 import { findPreyInRange, resolvePredation } from '../ecology/predation'
-import { mutateMobileGenome, shouldSpeciateMobile } from '../genetics/agentMutation'
+import { mutateMobileAgentTraits, shouldSpeciateMobile } from '../genetics/agentMutation'
+import { deriveSensoryProfile } from '../senses/SenseSystem'
+import { buildSpeciesSelectionProfiles } from '../species/speciesSelectionMetrics'
 import { getTileAt } from '../world/generateWorld'
 import { isTileActive } from '../world/planetMask'
 import {
@@ -57,6 +62,7 @@ export class AgentSystem {
     starvationCount: 0,
     localExtinctions: 0,
   }
+  private lastWorld: World | null = null
 
   constructor(seed: string, world: World, life: LifeSystem) {
     this.seed = seed
@@ -135,6 +141,7 @@ export class AgentSystem {
     this.tickRng = forkRng(this.seed, `agents-tick-${tick}`)
     this.predationCountTick = 0
     this.starvationCountTick = 0
+    this.lastWorld = world
 
     const tileBiomass = this.life.getTileBiomassArray()
     this.rebuildTileAgentIndex(world)
@@ -151,10 +158,25 @@ export class AgentSystem {
         continue
       }
 
+      const idx = agent.y * world.width + agent.x
+      const scanCtx = { tileBiomass, tileAgentIndex: this.tileAgentIndex }
+      agent.sensoryInput = scanLocalEnvironment(agent, world, scanCtx)
+      const fitness = computeAgentFitness(
+        agent,
+        tile,
+        tileBiomass[idx] ?? 0,
+        this.tileAgentCounts[idx] ?? 0,
+        agent.sensoryInput.predatorPressure,
+      )
+      agent.environmentalFitness = fitness.score
+      agent.habitatStress = fitness.healthStress
+      agent.senses = deriveSensoryProfile(agent.genome, agent.bodyPlan)
+
       agent.hunger = Math.min(1, agent.hunger + AGENT_HUNGER_RATE * agent.genome.metabolism)
-      const metabolism = AGENT_BASE_METABOLISM * agent.genome.metabolism
+      const metabolism = AGENT_BASE_METABOLISM * agent.genome.metabolism * (2 - fitness.energyGainMultiplier * 0.5)
       agent.energy = Math.max(0, agent.energy - metabolism)
 
+      if (fitness.healthStress > 0.55) agent.health -= 0.03
       if (agent.energy < 0.18) agent.health -= 0.05
       if (agent.hunger > 0.85) agent.health -= 0.04
       agent.age += 1
@@ -162,6 +184,7 @@ export class AgentSystem {
 
       const goal = chooseAgentGoal(agent, tileBiomass, world, this.tileAgentIndex, this.tickRng)
       agent.currentGoal = goal
+      agent.targetReason = goalTargetReason(agent, goal)
 
       if (goal === 'rest') {
         agent.lastAction = 'rest'
@@ -182,7 +205,7 @@ export class AgentSystem {
               step.x,
               step.y,
               agent.genome.terrainPreference,
-            )
+            ) * fitness.movementCostMultiplier
             agent.energy = Math.max(0, agent.energy - movementEnergyCost(agent, terrainCost))
             this.moveAgent(agent, step.x, step.y, world)
             agent.lastAction = 'move'
@@ -211,6 +234,7 @@ export class AgentSystem {
         agent.health > 0.55 &&
         agent.hunger < 0.5 &&
         agent.reproductionCooldown <= 0 &&
+        fitness.reproductionMultiplier > 0.45 &&
         this.agents.length + births.length < MAX_TOTAL_AGENTS
       ) {
         const child = this.tryReproduce(agent, world, tick, emit, suppressMinorEvents)
@@ -286,6 +310,19 @@ export class AgentSystem {
       else if (agent.trophicRole === 'scavenger') scavengerCount += 1
     }
 
+    const tileBiomass = this.life.getTileBiomassArray()
+    const species = registry.getAll()
+    const selectionProfiles =
+      this.lastWorld && includeAgents
+        ? buildSpeciesSelectionProfiles(
+            species,
+            this.agents,
+            this.lastWorld,
+            tileBiomass,
+            this.tileAgentCounts,
+          )
+        : {}
+
     return {
       agents: includeAgents ? [...this.agents] : [],
       totalAgents: this.agents.length,
@@ -297,6 +334,7 @@ export class AgentSystem {
       foodWebLinks: this.foodWeb.getLinks().slice(0, 24),
       dominantGrazerSpeciesId: registry.getDominantByRole('grazer')?.id ?? null,
       dominantPredatorSpeciesId: registry.getDominantByRole('predator')?.id ?? null,
+      speciesSelectionProfiles: selectionProfiles,
     }
   }
 
@@ -349,7 +387,13 @@ export class AgentSystem {
       return
     }
 
-    agent.energy = Math.min(1, agent.energy + result.energyGain * (actual / result.consumed))
+    agent.energy = Math.min(
+      1,
+      agent.energy +
+        result.energyGain *
+          (actual / result.consumed) *
+          (0.85 + agent.environmentalFitness * 0.25),
+    )
     agent.hunger = Math.max(0, agent.hunger - actual * 1.8)
     agent.lastAction = 'graze'
 
@@ -370,7 +414,7 @@ export class AgentSystem {
     deaths: string[],
   ): void {
     this.rebuildTileAgentIndex(world)
-    const prey = findPreyInRange(predator, this.agents, this.tileAgentIndex, world.width)
+    const prey = findPreyInRange(predator, this.agents, this.tileAgentIndex, world.width, predator.senses.visualRange)
     if (!prey) {
       predator.lastAction = 'idle'
       predator.energy = Math.max(0, predator.energy - 0.04)
@@ -432,13 +476,16 @@ export class AgentSystem {
     emit: AgentEventEmitter,
     suppressMinorEvents: boolean,
   ): MobileAgent | null {
-    if (this.tickRng() > parent.genome.reproductionRate * 0.5 + 0.2) return null
+    if (this.tickRng() > parent.genome.reproductionRate * 0.5 * parent.environmentalFitness + 0.2) return null
     if (this.countAtTile(parent.x, parent.y, world) >= MAX_AGENTS_PER_TILE) return null
 
     const registry = this.life.getRegistry()
-    const childGenome = mutateMobileGenome(
+    const mutRng = forkRng(this.seed, `agent-mut-${parent.id}-${tick}`)
+    const { genome: childGenome, bodyPlan: childBodyPlan } = mutateMobileAgentTraits(
       parent.genome,
-      forkRng(this.seed, `agent-mut-${parent.id}-${tick}`),
+      parent.bodyPlan,
+      parent.kind,
+      mutRng,
     )
     let speciesId = parent.speciesId
     const childGeneration = parent.generation + 1
@@ -471,7 +518,15 @@ export class AgentSystem {
       }
     }
 
-    return createAgent(parent.kind, speciesId, parent.x, parent.y, childGenome, childGeneration)
+    return createAgent(
+      parent.kind,
+      speciesId,
+      parent.x,
+      parent.y,
+      childGenome,
+      childGeneration,
+      childBodyPlan,
+    )
   }
 
   private spawnFounder(

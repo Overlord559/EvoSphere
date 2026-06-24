@@ -56,44 +56,77 @@ function kindHue(kind: string, genome: Genome | MobileGenome): number {
 
 export function agentVisualTraits(agent: MobileAgent): AgentVisualTraits {
   const g = agent.genome
+  const bp = agent.bodyPlan
   const healthFactor = clamp01(agent.health)
   const energyFactor = clamp01(agent.energy)
   const biomassScale = 0.75 + clamp01(agent.biomass / 2) * 0.5
 
   const speed = g.speed
   const stamina = g.stamina
-  const sensory = g.sensoryRange / 4
+  const sensory = agent.senses.visualRange / 5
   const hunting = g.huntingEfficiency
   const grazing = g.grazingEfficiency
   const aggression = g.aggression
   const fear = g.fearfulness
-  const waterTol = g.waterTolerance
 
   const isPredator = agent.kind === 'SimplePredator'
   const isScavenger = agent.kind === 'Scavenger'
 
-  let legCount = Math.round(2 + speed * 4)
-  if (isScavenger) legCount = Math.max(4, legCount)
-  legCount = Math.min(6, legCount)
+  let legCount = bp.limbCount
+  if (bp.locomotionType === 'fins') legCount = Math.max(2, Math.min(6, legCount))
+  if (bp.locomotionType === 'tentacles') legCount = Math.max(4, legCount)
 
   const facingAngle = entityHash01(agent.id, 3) * Math.PI * 2
 
+  const mouthScale =
+    bp.mouthType === 'jaw' || bp.mouthType === 'mandible'
+      ? 0.18 + hunting * 0.22
+      : bp.mouthType === 'grazer_beak' || bp.mouthType === 'filter'
+        ? 0.12 + grazing * 0.18
+        : 0.1 + grazing * 0.12
+
+  let antennaCount = 0
+  if (bp.sensorType === 'antennae' || bp.sensorType === 'smell') {
+    antennaCount = Math.round(1 + sensory * 4)
+  } else if (bp.sensorType === 'vibration') {
+    antennaCount = 2
+  }
+
   return {
-    bodyScale: biomassScale * (0.85 + stamina * 0.3),
-    bodyWidth: isPredator ? 0.55 + hunting * 0.15 : isScavenger ? 0.5 : 0.65 + grazing * 0.1,
+    bodyScale: biomassScale * (0.85 + stamina * 0.3) * (0.9 + bp.armorLevel * 0.15),
+    bodyWidth:
+      bp.locomotionType === 'gliding'
+        ? 0.75 + speed * 0.15
+        : isPredator
+          ? 0.55 + hunting * 0.15
+          : isScavenger
+            ? 0.5
+            : 0.65 + grazing * 0.1,
     bodyHeight: isPredator ? 0.35 + speed * 0.2 : isScavenger ? 0.45 : 0.5 + stamina * 0.15,
     headScale: isPredator ? 0.35 + aggression * 0.15 : 0.28 + sensory * 0.12,
-    eyeScale: 0.08 + sensory * 0.12,
-    mouthScale: isPredator ? 0.15 + hunting * 0.2 : 0.1 + grazing * 0.15,
-    tailLength: isPredator ? 0.35 + speed * 0.25 : isScavenger ? 0.15 : 0.2 + speed * 0.15,
+    eyeScale: bp.sensorType === 'eyes' ? 0.1 + sensory * 0.14 : 0.06 + sensory * 0.08,
+    mouthScale,
+    tailLength:
+      bp.tailType === 'long' || bp.tailType === 'spined'
+        ? 0.4 + speed * 0.2
+        : bp.tailType === 'fin'
+          ? 0.35
+          : bp.tailType === 'short'
+            ? 0.18
+            : 0.08,
     legCount,
-    appendageLength: 0.15 + speed * 0.2,
-    finEmphasis: waterTol > 0.7,
-    antennaCount: isScavenger ? Math.round(2 + sensory * 3) : sensory > 0.5 ? 2 : 0,
-    clawEmphasis: isPredator && hunting > 0.5,
-    spineEmphasis: isPredator && aggression > 0.6,
-    angularBody: isPredator || aggression > 0.55,
-    compactPosture: fear > 0.55,
+    appendageLength:
+      bp.locomotionType === 'tentacles'
+        ? 0.25 + aggression * 0.15
+        : bp.locomotionType === 'fins'
+          ? 0.22 + bp.aquaticAdaptation * 0.15
+          : 0.15 + speed * 0.2,
+    finEmphasis: bp.locomotionType === 'fins' || bp.aquaticAdaptation > 0.65,
+    antennaCount,
+    clawEmphasis: (isPredator && hunting > 0.5) || bp.mouthType === 'mandible',
+    spineEmphasis: bp.tailType === 'spined' || (isPredator && aggression > 0.6),
+    angularBody: isPredator || aggression > 0.55 || bp.bodyCovering === 'shell',
+    compactPosture: fear > 0.55 || bp.armorLevel > 0.6,
     hue: kindHue(agent.kind, g),
     saturation: 0.55 + g.energyEfficiency * 0.25,
     brightness: 0.45 + healthFactor * 0.35 + energyFactor * 0.15,
