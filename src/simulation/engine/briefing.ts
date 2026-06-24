@@ -7,6 +7,7 @@ import type {
   EventLogEntry,
   SelectedSpeciesBriefing,
 } from '../../types/runtime'
+import { formatEstimatedPopulation } from '../ecology/representationScale'
 import { threatStatus } from '../species/speciesOccupancy'
 import {
   eraForTick,
@@ -107,7 +108,8 @@ export function buildBriefing(
   const popArch = life.populationArchitecture
   let plateauExplanation: string | null = null
   if (popArch.artificialCapEngaged && popArch.representationCapped) {
-    plateauExplanation = `Aggregate population continues (${popArch.aggregatePopulation} in reserve); tracked individuals capped for performance.`
+    const rep = popArch.representation
+    plateauExplanation = `Population compressed into ${rep.populationUnitsCount} cohort/patch units (est. ${formatEstimatedPopulation(rep.estimatedBiologicalPopulation)} individuals); tracked individuals capped for performance.`
   } else if (popArch.capacityPressurePct >= 85) {
     plateauExplanation = 'Population plateau is ecological, not artificial — local carrying capacity reached.'
   }
@@ -128,6 +130,14 @@ export function buildBriefing(
     bottleneckStatus = plateauExplanation ?? 'Bottleneck detected — monitoring population spread'
   }
 
+  const rep = popArch.representation
+  const totalBio =
+    life.totalBiologicalPopulation + agents.totalMobilePopulation
+  let representationSummary: string | null = null
+  if (rep.populationUnitsCount > 0) {
+    representationSummary = `Ecology uses ${rep.populationUnitsCount} simulation units (${rep.producerUnits} producer patches/blooms, ${rep.mobileCohorts} mobile cohorts) representing ~${formatEstimatedPopulation(totalBio)} individuals (${rep.compressionRatio}× compression).`
+  }
+
   const populationArchitecture: import('../../types/runtime').PopulationArchitectureBriefing = {
     trackedOrganisms: life.totalOrganisms,
     aggregateOrganisms: life.aggregateOrganisms,
@@ -140,6 +150,10 @@ export function buildBriefing(
     representationCapped: popArch.representationCapped,
     bottleneckKind: popArch.bottleneckKind,
     plateauExplanation,
+    populationUnitsCount: rep.populationUnitsCount,
+    estimatedBiologicalPopulation: totalBio,
+    compressionRatio: rep.compressionRatio,
+    representationSummary,
   }
 
   return {

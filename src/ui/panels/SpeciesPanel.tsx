@@ -1,4 +1,5 @@
 import { useSimulationStore } from '../../store/simulationStore'
+import { formatEstimatedPopulation } from '../../simulation/ecology/representationScale'
 import { threatStatus } from '../../simulation/species/speciesOccupancy'
 import { lifeKindLabel, terrainLabel } from '../viewport/tileColors'
 
@@ -62,7 +63,9 @@ export function SpeciesPanel() {
             <Row label="Establishment" value={selectedRecord.establishmentStatus} />
             <Row label="Local fitness" value={selectedRecord.localFitnessScore.toFixed(2)} />
             <Row label="Memory score" value={selectedRecord.speciesMemoryScore.toFixed(2)} />
-            <Row label="Population" value={String(selectedRecord.population)} />
+            <Row label="Est. population" value={formatEstimatedPopulation(selectedRecord.population)} />
+            <Row label="Cohort units" value={String(selectedOccupancy?.unitCount ?? 0)} />
+            <Row label="Tracked reps" value={String(life.totalOrganisms)} />
             <Row label="Biomass" value={selectedRecord.totalBiomass.toFixed(1)} />
             <Row label="Occupied tiles" value={String(selectedOccupancy?.occupiedTileCount ?? 0)} />
             <Row label="Avg generation" value={(selectedOccupancy?.avgGeneration ?? selectedRecord.generation).toFixed(1)} />
@@ -156,13 +159,13 @@ export function SpeciesPanel() {
                       <span className={isSelected ? 'text-violet-300' : 'text-command-accent'}>
                         {species.name}
                       </span>
-                      <span className="text-emerald-400">{species.population} pop</span>
+                      <span className="text-emerald-400">{formatEstimatedPopulation(species.population)} pop</span>
                     </div>
                     <div className="mt-1 flex justify-between text-slate-400">
                       <span>
                         {lifeKindLabel(species.kind)} · {species.trophicRole}
                       </span>
-                      <span>{occupancy?.occupiedTileCount ?? 0} tiles</span>
+                      <span>{occupancy?.occupiedTileCount ?? 0} tiles · {occupancy?.unitCount ?? 0} units</span>
                     </div>
                     {selectionProfiles[species.id] && (
                       <p className="mt-1 truncate text-[10px] text-slate-500">

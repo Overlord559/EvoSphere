@@ -435,9 +435,33 @@ Modules:
 | `simulation/species/speciesRegistry.ts` | Species tracking + founder lineages |
 | `simulation/species/speciesOccupancy.ts` | Occupancy index + threat heuristics |
 
-Population controls: max 4 organisms/tile (tracked), max 3 agents/tile (tracked). **v0.5.4c:** global 5000/800 caps demoted to legacy reference; growth limited by `carryingCapacity.ts` + aggregate pools (`aggregatePopulation.ts`) when tracked budget full. Render draw caps unchanged (400–800 agents).
+Population controls: max 4 organisms/tile (tracked), max 3 agents/tile (tracked). **v0.5.4d:** biological population scales via cohort/patch/bloom units (`populationUnits.ts`); simulation record count bounded (~1800 units). Tracked/render budgets unchanged.
 
-## v0.5.4c — Population architecture
+## v0.5.4d — Population units + cohort representation
+
+| Layer | Role |
+|-------|------|
+| **Estimated biological population** | Sum of `representedIndividuals` across tracked entities + cohort units |
+| **Population units** | Bounded cohort/patch/bloom records — merge when budget exceeded |
+| **Tracked individuals** | Performance budget — visible representatives for inspection/movement |
+| **Rendered entities** | Pixi draw caps — LOD/culling only |
+
+Ultra crash root cause (browser ~14K biological pop): unbounded `species@tile` aggregate pools (MAX_POOLS 8000), full `speciesOccupancy.tileIndices` JSON per snapshot, and `[...tileCounts]` copies every snapshot.
+
+Key paths:
+
+| Path | Role |
+|------|------|
+| `simulation/ecology/populationUnits.ts` | Cohort/patch/bloom store |
+| `simulation/ecology/representationScale.ts` | Species-specific individuals-per-unit policy |
+| `simulation/ecology/populationUnitOps.ts` | Deterministic merge/split |
+| `simulation/ecology/carryingCapacity.ts` | Dynamic per-tile and world carrying capacity |
+| `simulation/ecology/populationConfig.ts` | World-size-scaled budgets |
+| `simulation/species/speciesOccupancy.ts` | Capped tile index occupancy (64/species) |
+
+Headless gates: `npm run qa:representation` · `npm run qa:population` · `npm run qa:determinism`
+
+## v0.5.4c — Population architecture (superseded by v0.5.4d units)
 
 | Layer | Role |
 |-------|------|

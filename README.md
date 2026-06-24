@@ -2,9 +2,18 @@
 
 Physics-constrained biosphere-to-space-age civilization simulator — deterministic world generation, emergent microbial and plant life, mobile agents with predation, circular planet viewport, and Spore-inspired procedural Pixi rendering.
 
-**Current phase:** v0.5.4c Population Cap Architecture + Adaptive Carrying Capacity
+**Current phase:** v0.5.4d Population Units + Cohort Representation + Ultra Crash Fix
 
 ## Status
+
+v0.5.4d population units + cohort representation (2026-06-24):
+
+- **Population count ≠ entity count** — cohort/patch/bloom units represent many individuals via species-specific scales (microbes B, algae M, plants patches, herds/packs/swarms)
+- **Bounded simulation records** — max ~1800 population units; merge/split when budget exceeded; tracked/render budgets unchanged
+- **Ultra crash fix** — replaced unbounded species×tile aggregate pools (up to 8000) with compressed units; capped species occupancy tile indices; snapshot no longer copies full tile arrays every frame
+- **Soak HUD / Briefing** — estimated biological pop, unit count, tracked, rendered, compression ratio
+- **QA** — `npm run qa:representation` verifies pop >14K legacy crash point with bounded units
+- **Blocked until soak passes:** v0.6 Communication + Social Learning
 
 v0.5.4c population architecture (2026-06-24):
 

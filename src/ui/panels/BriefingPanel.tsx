@@ -1,4 +1,5 @@
 import { useSimulationStore } from '../../store/simulationStore'
+import { formatEstimatedPopulation } from '../../simulation/ecology/representationScale'
 import { formatSimYears } from '../../simulation/engine/simTime'
 import { lifeKindLabel } from '../viewport/tileColors'
 
@@ -148,17 +149,34 @@ export function BriefingPanel() {
           <p className="mb-1 text-emerald-300/80">POPULATION ARCHITECTURE</p>
           <dl className="space-y-0.5">
             <Row
-              label="Tracked / aggregate orgs"
-              value={`${briefing.populationArchitecture.trackedOrganisms} / ${briefing.populationArchitecture.aggregateOrganisms}`}
+              label="Est. biological pop"
+              value={formatEstimatedPopulation(briefing.populationArchitecture.estimatedBiologicalPopulation)}
             />
             <Row
-              label="Tracked / reserve agents"
-              value={`${briefing.populationArchitecture.trackedAgents} / ${briefing.populationArchitecture.agentReserve}`}
+              label="Tracked / cohort orgs"
+              value={`${briefing.populationArchitecture.trackedOrganisms} / ${formatEstimatedPopulation(briefing.populationArchitecture.aggregateOrganisms)}`}
+            />
+            <Row
+              label="Tracked / cohort agents"
+              value={`${briefing.populationArchitecture.trackedAgents} / ${formatEstimatedPopulation(briefing.populationArchitecture.agentReserve)}`}
+            />
+            <Row
+              label="Population units"
+              value={String(briefing.populationArchitecture.populationUnitsCount)}
+            />
+            <Row
+              label="Compression ratio"
+              value={`${briefing.populationArchitecture.compressionRatio}×`}
             />
             <Row
               label="Capacity pressure"
               value={`${briefing.populationArchitecture.capacityPressurePct}%`}
             />
+            {briefing.populationArchitecture.representationSummary && (
+              <p className="pt-1 text-[10px] text-slate-400">
+                {briefing.populationArchitecture.representationSummary}
+              </p>
+            )}
             {briefing.populationArchitecture.plateauExplanation && (
               <p className="pt-1 text-[10px] text-slate-400">{briefing.populationArchitecture.plateauExplanation}</p>
             )}

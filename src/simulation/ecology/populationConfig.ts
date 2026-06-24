@@ -16,10 +16,12 @@ export interface PopulationArchitectureConfig {
   aggregatePopulationEnabled: boolean
   /** Scale tracked/render budgets with active world area. */
   populationScaleByWorldArea: boolean
-  /** Hard safety ceiling for tracked + aggregate combined (producers). */
+  /** Hard safety ceiling for tracked + cohort combined (producers). */
   safetyOrganismCeiling: number
-  /** Hard safety ceiling for tracked + aggregate combined (mobile). */
+  /** Hard safety ceiling for tracked + cohort combined (mobile). */
   safetyAgentCeiling: number
+  /** Max bounded population unit records (representation budget). */
+  maxPopulationUnitsTotal: number
   /** Active tiles used for scaling. */
   activeTileCount: number
 }
@@ -32,6 +34,7 @@ const DEFAULT_CONFIG: Omit<PopulationArchitectureConfig, 'activeTileCount'> = {
   populationScaleByWorldArea: true,
   safetyOrganismCeiling: 25000,
   safetyAgentCeiling: 2000,
+  maxPopulationUnitsTotal: 1800,
 }
 
 /** Build world-size-aware population architecture config. */
@@ -52,6 +55,7 @@ export function buildPopulationConfig(world: World): PopulationArchitectureConfi
     populationScaleByWorldArea: true,
     safetyOrganismCeiling: Math.round(12000 + activeTileCount * 0.45),
     safetyAgentCeiling: Math.round(1600 + activeTileCount * 0.04),
+    maxPopulationUnitsTotal: 1800,
     activeTileCount,
   }
 }

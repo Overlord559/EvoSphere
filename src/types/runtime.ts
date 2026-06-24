@@ -107,6 +107,11 @@ export interface PopulationArchitectureBriefing {
   representationCapped: boolean
   bottleneckKind: string | null
   plateauExplanation: string | null
+  /** v0.5.4d cohort representation. */
+  populationUnitsCount: number
+  estimatedBiologicalPopulation: number
+  compressionRatio: number
+  representationSummary: string | null
 }
 
 export interface SuccessionOverview {

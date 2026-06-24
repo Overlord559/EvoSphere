@@ -16,7 +16,8 @@
     "qa:succession": "tsx scripts/qa-succession.ts",
     "qa:evolution": "tsx scripts/qa-evolution.ts",
     "qa:determinism": "tsx scripts/qa-determinism.ts",
-    "qa:population": "tsx scripts/qa-population.ts"
+    "qa:population": "tsx scripts/qa-population.ts",
+    "qa:representation": "tsx scripts/qa-representation.ts"
   },
   "dependencies": {
     "idb": "^8.0.3",

@@ -501,6 +501,34 @@ export class SimEngine {
       this.life.getSnapshot(includeOrganisms, this.world, agentSnap.agents),
     )
 
+    const agentCohorts = this.agents.getCohortMetrics()
+    const combinedUnits =
+      life.representationMetrics.populationUnitsCount + agentCohorts.populationUnitsCount
+    const combinedBio =
+      life.totalBiologicalPopulation + agentSnap.totalMobilePopulation
+    life.representationMetrics = {
+      populationUnitsCount: combinedUnits,
+      producerUnits: life.representationMetrics.producerUnits,
+      mobileCohorts: agentCohorts.mobileCohorts,
+      averageRepresentedPerUnit:
+        combinedUnits > 0 ? Math.round(combinedBio / combinedUnits) : 0,
+      largestUnitScale: Math.max(
+        life.representationMetrics.largestUnitScale,
+        agentCohorts.largestUnitScale,
+      ),
+      compressionRatio:
+        combinedUnits > 0 ? Math.round((combinedBio / combinedUnits) * 10) / 10 : 0,
+      estimatedBiologicalPopulation: combinedBio,
+    }
+    life.populationArchitecture = {
+      ...life.populationArchitecture,
+      representation: life.representationMetrics,
+    }
+    life.populationUnits = [
+      ...life.populationUnits,
+      ...this.agents.getPopulationReserveUnits(),
+    ].slice(0, 32)
+
     let briefing = this.cachedBriefing
     if (fullBriefing || !briefing || this.cachedBriefingTick !== this.tick) {
       briefing = globalProfiler.time('briefingBuild', () => buildBriefing(

@@ -13,7 +13,7 @@ import {
 import type { World } from '../../types/simulation'
 import type { Rng } from '../../utils/rng'
 import { forkRng } from '../../utils/rng'
-import { AggregatePopulationStore } from '../ecology/aggregatePopulation'
+import { PopulationUnitStore } from '../ecology/populationUnits'
 import {
   getTileCarryingCapacity,
   type CarryingCapacityContext,
@@ -77,7 +77,7 @@ export class AgentSystem {
     localExtinctions: 0,
   }
   private lastWorld: World | null = null
-  private readonly populationReserve = new AggregatePopulationStore()
+  private readonly populationReserve = new PopulationUnitStore()
   private popConfig: PopulationArchitectureConfig | null = null
   private capacityEventCooldown = 0
   private recoveryMods: RecoveryModifiers = {
@@ -110,6 +110,7 @@ export class AgentSystem {
       populationScaleByWorldArea: true,
       safetyOrganismCeiling: 25000,
       safetyAgentCeiling: 2000,
+      maxPopulationUnitsTotal: 1800,
       activeTileCount: 6000,
     }
   }
@@ -335,6 +336,7 @@ export class AgentSystem {
       ctx,
       forkRng(this.seed, `mob-reserve-${tick}`),
       this.recoveryMods.reproductionBoost,
+      tick,
     )
 
     if (!suppressMinorEvents && this.capacityEventCooldown <= 0) {
@@ -370,6 +372,23 @@ export class AgentSystem {
 
   getAgentCount(): number {
     return this.agents.length
+  }
+
+  getCohortMetrics(): import('../../types/life').RepresentationMetrics {
+    const snap = this.populationReserve.getSnapshot()
+    return {
+      populationUnitsCount: snap.unitCount,
+      producerUnits: 0,
+      mobileCohorts: snap.mobileCohortCount,
+      averageRepresentedPerUnit: snap.averageRepresentedPerUnit,
+      largestUnitScale: snap.largestUnitScale,
+      compressionRatio: snap.compressionRatio,
+      estimatedBiologicalPopulation: this.getMobileBiologicalPopulation(),
+    }
+  }
+
+  getPopulationReserveUnits(): import('../ecology/populationUnits').PopulationUnit[] {
+    return this.populationReserve.getSnapshot().topUnits
   }
 
   quarantineInvalid(world: World): number {
@@ -426,10 +445,10 @@ export class AgentSystem {
     let reserveGrazers = 0
     let reservePredators = 0
     let reserveScavengers = 0
-    for (const entry of this.populationReserve.getSnapshot().topPools) {
-      if (entry.kind === 'SimpleGrazer') reserveGrazers += entry.count
-      else if (entry.kind === 'SimplePredator') reservePredators += entry.count
-      else if (entry.kind === 'Scavenger') reserveScavengers += entry.count
+    for (const entry of this.populationReserve.getAllUnits()) {
+      if (entry.kind === 'SimpleGrazer') reserveGrazers += entry.representedIndividuals
+      else if (entry.kind === 'SimplePredator') reservePredators += entry.representedIndividuals
+      else if (entry.kind === 'Scavenger') reserveScavengers += entry.representedIndividuals
     }
 
     return {
@@ -682,7 +701,7 @@ export class AgentSystem {
     const tileIndividuals = this.countAtTile(parent.x, parent.y, world)
     if (trackedAtCap || tileIndividuals >= MAX_AGENTS_PER_TILE) {
       if (!popConfig.aggregatePopulationEnabled) return null
-      this.populationReserve.addPopulation(speciesId, parent.kind, tileIdx, 1)
+      this.populationReserve.addPopulation(speciesId, parent.kind, tileIdx, 1, tick)
       return 'reserve'
     }
 
@@ -722,7 +741,7 @@ export class AgentSystem {
       if (!popConfig.aggregatePopulationEnabled) return
       const founder = createFounderAgent(kind, '', x, y)
       const species = registry.getOrCreateFounderSpecies(kind, founder.genome, tick)
-      this.populationReserve.addPopulation(species.id, kind, idx, 1)
+      this.populationReserve.addPopulation(species.id, kind, idx, 1, tick)
       return
     }
 

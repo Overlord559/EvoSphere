@@ -3,6 +3,7 @@ import type { LifeSnapshot } from '../../types/life'
 import type { DisasterSnapshot, LatestDevelopment } from '../../types/runtime'
 import type { EventLogEntry, World } from '../../types/simulation'
 import { DISASTER_LABELS, type DisasterType } from '../disasters/DisasterTypes'
+import { formatEstimatedPopulation } from '../ecology/representationScale'
 import { tickToYears } from './simTime'
 
 function regionLabel(cx: number, cy: number, width: number, height: number): string {
@@ -222,8 +223,9 @@ export function buildLatestDevelopments(
 
   const popArch = life.populationArchitecture
   if (popArch.representationCapped && out.length < 8) {
+    const rep = popArch.representation
     push(
-      `Scavenger/grazer population is representation-capped; ${life.aggregateOrganisms + agents.populationReserve} in aggregate reserve.`,
+      `Population compressed into ${rep.populationUnitsCount} cohort/patch units (~${formatEstimatedPopulation(life.aggregateOrganisms + agents.populationReserve)} in reserve); ${agents.totalAgents} visible agents represent larger herds/packs.`,
       'info',
     )
   } else if (popArch.capacityPressurePct >= 80 && out.length < 8) {

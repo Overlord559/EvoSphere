@@ -68,9 +68,14 @@ function runPhase(speed: SimSpeed, targetSeconds: number, fps = 60): PhaseResult
     notes.push(`tracked organism safety exceeded: ${snap.life.totalOrganisms}`)
   }
   const bioPop = snap.life.totalBiologicalPopulation + snap.agents.totalMobilePopulation
-  if (bioPop > 50000 || !Number.isFinite(bioPop)) {
+  const units = snap.life.representationMetrics?.populationUnitsCount ?? 0
+  if (units > 2500 || !Number.isFinite(bioPop)) {
     pass = false
-    notes.push(`runaway biological population: ${bioPop}`)
+    notes.push(`runaway representation records: ${units} units`)
+  }
+  if (bioPop > 0 && !Number.isFinite(bioPop)) {
+    pass = false
+    notes.push(`invalid biological population: ${bioPop}`)
   }
 
   for (const agent of snap.agents.agents.slice(0, 50)) {

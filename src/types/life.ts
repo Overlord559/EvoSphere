@@ -89,13 +89,42 @@ export interface TileLifeData {
 
 export interface SpeciesOccupancy {
   speciesId: string
-  /** Tile indices (y * width + x) where this species has organisms. */
+  /** Tile indices (y * width + x) where this species has organisms — capped for snapshot size. */
   tileIndices: number[]
   occupiedTileCount: number
   avgGeneration: number
   avgEnergy: number
   avgHealth: number
   dominantTerrain: import('./simulation').TerrainType | null
+  /** Simulation cohort/patch units for this species. */
+  unitCount?: number
+  /** Estimated biological individuals (tracked + cohort). */
+  estimatedPopulation?: number
+}
+
+export interface RepresentationMetrics {
+  /** Bounded simulation cohort/patch/bloom units. */
+  populationUnitsCount: number
+  producerUnits: number
+  mobileCohorts: number
+  averageRepresentedPerUnit: number
+  largestUnitScale: number
+  compressionRatio: number
+  estimatedBiologicalPopulation: number
+}
+
+export interface PopulationArchitectureMetrics {
+  trackedIndividuals: number
+  aggregatePopulation: number
+  totalBiologicalPopulation: number
+  worldCarryingCapacityEstimate: number
+  capacityPressurePct: number
+  expansionPressurePct: number
+  artificialCapEngaged: boolean
+  representationCapped: boolean
+  bottleneckKind: import('../simulation/evolution/bottleneckRecovery').BottleneckKind | null
+  /** v0.5.4d cohort representation telemetry. */
+  representation: RepresentationMetrics
 }
 
 export interface LifeSnapshot {
@@ -117,18 +146,10 @@ export interface LifeSnapshot {
   speciesOccupancy: Record<string, SpeciesOccupancy>
   /** Population architecture telemetry. */
   populationArchitecture: PopulationArchitectureMetrics
-}
-
-export interface PopulationArchitectureMetrics {
-  trackedIndividuals: number
-  aggregatePopulation: number
-  totalBiologicalPopulation: number
-  worldCarryingCapacityEstimate: number
-  capacityPressurePct: number
-  expansionPressurePct: number
-  artificialCapEngaged: boolean
-  representationCapped: boolean
-  bottleneckKind: import('../simulation/evolution/bottleneckRecovery').BottleneckKind | null
+  /** Top population units for inspector (bounded sample). */
+  populationUnits: import('../simulation/ecology/populationUnits').PopulationUnit[]
+  /** Cohort representation summary. */
+  representationMetrics: RepresentationMetrics
 }
 
 export const MAX_ORGANISMS_PER_TILE = 4

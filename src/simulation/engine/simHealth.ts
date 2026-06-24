@@ -37,15 +37,23 @@ export interface SimHealthInput {
 }
 
 export function estimateSnapshotBytes(snapshot: {
-  life: { tileCounts: number[]; organisms: unknown[] }
+  life: {
+    tileCounts: number[]
+    organisms: unknown[]
+    populationUnits?: unknown[]
+    speciesOccupancy: Record<string, unknown>
+  }
   agents: { agents: unknown[] }
   events: unknown[]
 }): number {
+  const occEntries = Object.keys(snapshot.life.speciesOccupancy).length
   return (
     snapshot.life.tileCounts.length * 2 +
     snapshot.life.organisms.length * 420 +
     snapshot.agents.agents.length * 680 +
     snapshot.events.length * 120 +
+    (snapshot.life.populationUnits?.length ?? 0) * 180 +
+    occEntries * 320 +
     4096
   )
 }

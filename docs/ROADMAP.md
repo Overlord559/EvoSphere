@@ -159,7 +159,17 @@
 - [x] UI — Briefing succession/recovery, Species variants, Inspector cognition, disaster controls
 - [x] QA — `qa:succession`, `qa:evolution`
 
-## v0.5.4c — Population Cap Architecture + Adaptive Carrying Capacity ✅ (current)
+## v0.5.4d — Population Units + Cohort Representation + Ultra Crash Fix ✅ (current)
+
+- [x] Population units/cohorts — `populationUnits.ts`, `representationScale.ts`, `populationUnitOps.ts`
+- [x] Species-specific representation scale — microbes B, algae blooms M, plant patches, herd/pack/swarm cohorts
+- [x] Bounded simulation records (~1800 units) with deterministic merge/split
+- [x] Ultra crash fix — bounded pools, compact species occupancy, snapshot tile array reuse
+- [x] Soak HUD + Briefing — est. pop, units, tracked, rendered, compression ratio
+- [x] QA — `qa:representation` · updated `qa:stability` representation-aware gates
+- [ ] v0.6 Communication + Social Learning — **blocked** until browser soak passes
+
+## v0.5.4c — Population Cap Architecture + Adaptive Carrying Capacity ✅
 
 - [x] Aggregate population pools for producers and mobile reserve when tracked budget full
 - [x] Dynamic carrying capacity — habitat, succession, biomass, trophic role, crowding

@@ -14,7 +14,7 @@ import {
 import type { World } from '../../types/simulation'
 import type { Rng } from '../../utils/rng'
 import { forkRng } from '../../utils/rng'
-import { AggregatePopulationStore } from '../ecology/aggregatePopulation'
+import { PopulationUnitStore } from '../ecology/populationUnits'
 import {
   getTileCarryingCapacity,
   getWorldCarryingCapacityByTrophicRole,
@@ -76,7 +76,7 @@ export class LifeSystem {
   private recentActivityTiles = new Set<number>()
   private lastTickBirths = 0
   private lastTickDeaths = 0
-  private readonly aggregate = new AggregatePopulationStore()
+  private readonly aggregate = new PopulationUnitStore()
   private popConfig: PopulationArchitectureConfig | null = null
   private capacityPressureCooldown = 0
   private lastBottleneckKind: import('../evolution/bottleneckRecovery').BottleneckKind = 'none'
@@ -97,7 +97,7 @@ export class LifeSystem {
     this.registry.clear()
   }
 
-  getAggregateStore(): AggregatePopulationStore {
+  getAggregateStore(): PopulationUnitStore {
     return this.aggregate
   }
 
@@ -111,6 +111,7 @@ export class LifeSystem {
       populationScaleByWorldArea: true,
       safetyOrganismCeiling: 25000,
       safetyAgentCeiling: 2000,
+      maxPopulationUnitsTotal: 1800,
       activeTileCount: 6000,
     }
   }
@@ -141,6 +142,17 @@ export class LifeSystem {
     const trackedAtCap = this.organisms.length >= config.maxTrackedIndividuals * 0.95
     const aggregateGrowing = this.aggregate.getTotalCount() > 0
 
+    const unitSnap = this.aggregate.getSnapshot()
+    const representation: import('../../types/life').RepresentationMetrics = {
+      populationUnitsCount: unitSnap.unitCount,
+      producerUnits: unitSnap.producerUnitCount,
+      mobileCohorts: unitSnap.mobileCohortCount,
+      averageRepresentedPerUnit: unitSnap.averageRepresentedPerUnit,
+      largestUnitScale: unitSnap.largestUnitScale,
+      compressionRatio: unitSnap.compressionRatio,
+      estimatedBiologicalPopulation: this.getBiologicalPopulation(),
+    }
+
     return {
       trackedIndividuals: this.organisms.length,
       aggregatePopulation: this.aggregate.getTotalCount(),
@@ -151,6 +163,7 @@ export class LifeSystem {
       artificialCapEngaged: trackedAtCap && capacityPressure < 0.85,
       representationCapped: trackedAtCap && aggregateGrowing,
       bottleneckKind: this.lastBottleneckKind === 'none' ? null : this.lastBottleneckKind,
+      representation,
     }
   }
 
@@ -397,6 +410,7 @@ export class LifeSystem {
       ctx,
       forkRng(this.seed, `agg-grow-${tick}`),
       this.recoveryMods.dispersalBoost,
+      tick,
     )
     if (aggGrowth.growth > 0 || aggGrowth.dispersals > 0) {
       this.rebuildTileIndex(world)
@@ -498,33 +512,59 @@ export class LifeSystem {
   ): LifeSnapshot {
     let occupancy = this.speciesOccupancyCache
     if (world && agents.length > 0) {
-      occupancy = buildSpeciesOccupancy(this.organisms, this.registry.getAll(), world, agents)
+      occupancy = buildSpeciesOccupancy(
+        this.organisms,
+        this.registry.getAll(),
+        world,
+        agents,
+        this.aggregate.getAllUnits(),
+      )
     }
+
+    const aggSnap = this.aggregate.getSnapshot()
+    const popMetrics = world ? this.getPopulationArchitectureMetrics(world) : null
 
     return {
       organisms: includeOrganisms ? [...this.organisms] : [],
       species: this.registry.getAll(),
       totalOrganisms: this.organisms.length,
-      aggregateOrganisms: this.aggregate.getTotalCount(),
-      totalBiologicalPopulation: this.getBiologicalPopulation(),
+      aggregateOrganisms: aggSnap.totalEstimatedIndividuals,
+      totalBiologicalPopulation: this.organisms.length + aggSnap.totalEstimatedIndividuals,
       totalBiomass: this.cachedTotalBiomass,
-      aggregateBiomass: this.aggregate.getTotalBiomass(),
-      tileCounts: [...this.tileCounts],
-      tileBiomass: [...this.tileBiomass],
+      aggregateBiomass: aggSnap.totalBiomass,
+      tileCounts: this.tileCounts,
+      tileBiomass: this.tileBiomass,
       speciesOccupancy: occupancy,
-      populationArchitecture: world
-        ? this.getPopulationArchitectureMetrics(world)
-        : {
-            trackedIndividuals: this.organisms.length,
-            aggregatePopulation: this.aggregate.getTotalCount(),
-            totalBiologicalPopulation: this.getBiologicalPopulation(),
-            worldCarryingCapacityEstimate: 0,
-            capacityPressurePct: 0,
-            expansionPressurePct: 0,
-            artificialCapEngaged: false,
-            representationCapped: false,
-            bottleneckKind: null,
-          },
+      populationArchitecture: popMetrics ?? {
+        trackedIndividuals: this.organisms.length,
+        aggregatePopulation: aggSnap.totalEstimatedIndividuals,
+        totalBiologicalPopulation: this.organisms.length + aggSnap.totalEstimatedIndividuals,
+        worldCarryingCapacityEstimate: 0,
+        capacityPressurePct: 0,
+        expansionPressurePct: 0,
+        artificialCapEngaged: false,
+        representationCapped: false,
+        bottleneckKind: null,
+        representation: {
+          populationUnitsCount: aggSnap.unitCount,
+          producerUnits: aggSnap.producerUnitCount,
+          mobileCohorts: aggSnap.mobileCohortCount,
+          averageRepresentedPerUnit: aggSnap.averageRepresentedPerUnit,
+          largestUnitScale: aggSnap.largestUnitScale,
+          compressionRatio: aggSnap.compressionRatio,
+          estimatedBiologicalPopulation: this.organisms.length + aggSnap.totalEstimatedIndividuals,
+        },
+      },
+      populationUnits: aggSnap.topUnits,
+      representationMetrics: {
+        populationUnitsCount: aggSnap.unitCount,
+        producerUnits: aggSnap.producerUnitCount,
+        mobileCohorts: aggSnap.mobileCohortCount,
+        averageRepresentedPerUnit: aggSnap.averageRepresentedPerUnit,
+        largestUnitScale: aggSnap.largestUnitScale,
+        compressionRatio: aggSnap.compressionRatio,
+        estimatedBiologicalPopulation: this.organisms.length + aggSnap.totalEstimatedIndividuals,
+      },
     }
   }
 
@@ -699,7 +739,7 @@ export class LifeSystem {
       if (!config.aggregatePopulationEnabled) return
       const founder = createFounderOrganism(kind, '', x, y)
       const species = this.registry.getOrCreateFounderSpecies(kind, founder.genome, tick)
-      this.aggregate.addPopulation(species.id, kind, y * world.width + x, 1)
+      this.aggregate.addPopulation(species.id, kind, y * world.width + x, 1, tick)
       return
     }
 
@@ -813,8 +853,8 @@ export class LifeSystem {
 
     if (trackedAtCap || tileIndividuals >= MAX_ORGANISMS_PER_TILE) {
       if (!config.aggregatePopulationEnabled) return null
-      this.aggregate.addPopulation(speciesId, parent.kind, pickIdx, 1)
-      if ((this.aggregate.getTileCount(pickIdx) === 1) && !suppressMinorEvents) {
+      this.aggregate.addPopulation(speciesId, parent.kind, pickIdx, 1, tick)
+      if (this.aggregate.getUnitsForTile(pickIdx, 2).length === 1 && !suppressMinorEvents) {
         const tile = getTileAt(world, pick.x, pick.y)
         if (tile) {
           emit(
@@ -877,7 +917,13 @@ export class LifeSystem {
     this.cachedTotalBiomass = totalBiomass
     this.registry.updateCounts(popMap)
     const species = this.registry.getAll()
-    this.speciesOccupancyCache = buildSpeciesOccupancy(this.organisms, species, world)
+    this.speciesOccupancyCache = buildSpeciesOccupancy(
+      this.organisms,
+      species,
+      world,
+      [],
+      this.aggregate.getAllUnits(),
+    )
   }
 
   private captureSpeciesPopulations(): void {

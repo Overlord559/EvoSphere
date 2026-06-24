@@ -1,4 +1,5 @@
 import { useSimulationStore } from '../../store/simulationStore'
+import { formatEstimatedPopulation } from '../../simulation/ecology/representationScale'
 import { cameraModeLabel } from '../viewport/cameraController'
 
 const SEVERITY_CLASS: Record<string, string> = {
@@ -25,6 +26,8 @@ export function SoakDebugHUD() {
   ).length
   const succession = snapshot.briefing.successionOverview
   const popArch = snapshot.briefing.populationArchitecture
+  const rep = snapshot.life.representationMetrics
+  const estBio = snapshot.life.totalBiologicalPopulation + snapshot.agents.totalMobilePopulation
   const bioticPct = succession
     ? Math.round(
         succession.grasslandPercent +
@@ -57,9 +60,13 @@ export function SoakDebugHUD() {
       <div className="mt-1 grid grid-cols-3 gap-x-2 gap-y-0.5 sm:grid-cols-4 lg:grid-cols-6">
         <span>heap {perf.heapEstimateMb ?? '—'} MB</span>
         <span>trend {perf.heapTrendMbPerMin ?? '—'} MB/m</span>
-        <span>orgs {snapshot.life.totalOrganisms}+{snapshot.life.aggregateOrganisms}</span>
-        <span>agents {snapshot.agents.totalAgents}+{snapshot.agents.populationReserve}</span>
-        <span>bio {snapshot.life.totalBiologicalPopulation + snapshot.agents.totalMobilePopulation}</span>
+        <span>est {formatEstimatedPopulation(estBio)}</span>
+        <span>units {rep?.populationUnitsCount ?? 0}</span>
+        <span>tracked {snapshot.life.totalOrganisms}+{snapshot.agents.totalAgents}</span>
+        <span>render {perf.drawnAgents + perf.drawnPlantTiles}</span>
+        <span>compress {rep?.compressionRatio ?? 0}×</span>
+        <span>orgs {snapshot.life.totalOrganisms}+{formatEstimatedPopulation(snapshot.life.aggregateOrganisms)}</span>
+        <span>agents {snapshot.agents.totalAgents}+{formatEstimatedPopulation(snapshot.agents.populationReserve)}</span>
         <span>cap {popArch?.capacityPressurePct ?? perf.organismCapUsagePct}%</span>
         <span>exp {popArch?.expansionPressurePct ?? '—'}%</span>
         {popArch?.artificialCapEngaged && <span className="text-amber-400">repr-cap</span>}

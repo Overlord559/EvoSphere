@@ -4,6 +4,7 @@ import type { BriefingSnapshot } from '../../types/runtime'
 import type { EventLogEntry, SimulationSnapshot, World } from '../../types/simulation'
 import type { AgentSnapshot } from '../../types/agents'
 import { AgentSoA } from '../agents/AgentSoA'
+import { buildCompactSpeciesOccupancy } from '../species/speciesOccupancy'
 import type {
   CompactInspectorPayload,
   CompactRenderPayload,
@@ -38,14 +39,21 @@ export function encodeSnapshot(
     agentPositions,
     agentSlotIndices,
     agentMetaJson: JSON.stringify(buildAgentMeta(agents.agents)),
-    speciesOccupancyJson: JSON.stringify(life.speciesOccupancy),
+    speciesOccupancyJson: JSON.stringify(buildCompactSpeciesOccupancy(life.speciesOccupancy)),
     lifeSummaryJson: JSON.stringify({
       totalOrganisms: life.totalOrganisms,
       totalBiomass: life.totalBiomass,
       species: life.species,
+      aggregateOrganisms: life.aggregateOrganisms,
+      totalBiologicalPopulation: life.totalBiologicalPopulation,
+      aggregateBiomass: life.aggregateBiomass,
+      populationArchitecture: life.populationArchitecture,
+      representationMetrics: life.representationMetrics,
+      populationUnits: life.populationUnits.slice(0, 32),
       tileCounts: undefined,
       tileBiomass: undefined,
       organisms: undefined,
+      speciesOccupancy: undefined,
     }),
     agentsSummaryJson: JSON.stringify({
       totalAgents: agents.totalAgents,

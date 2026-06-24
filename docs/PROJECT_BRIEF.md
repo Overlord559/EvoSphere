@@ -22,7 +22,15 @@ Evolution and emergence are fascinating but hard to explore interactively. Most 
 4. **Browser-first** — no install, no backend, IndexedDB for persistence later
 5. **Honest scope** — no fake data, no dead controls, no spectacle without substance
 
-## v0.5.4c Population Cap Architecture + Adaptive Carrying Capacity ✅ (current)
+## v0.5.4d Population Units + Cohort Representation + Ultra Crash Fix ✅ (current)
+
+- Population units/cohorts/patches/blooms — one record represents many individuals (species-specific scale)
+- Bounded simulation records (~1800 units) with deterministic merge/split
+- Ultra browser crash root cause: unbounded aggregate pools + species occupancy JSON + per-snapshot array copies
+- Soak HUD shows est. pop vs units vs tracked vs rendered vs compression ratio
+- v0.6 Communication blocked until Ultra browser soak passes
+
+## v0.5.4c Population Cap Architecture + Adaptive Carrying Capacity ✅
 
 - Aggregate vs tracked population — ecology continues in pools when representation budget full
 - Dynamic carrying capacity from habitat, succession, biomass, trophic role
