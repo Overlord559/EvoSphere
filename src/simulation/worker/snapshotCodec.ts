@@ -3,6 +3,9 @@ import type { LifeSnapshot } from '../../types/life'
 import type { BriefingSnapshot } from '../../types/runtime'
 import type { EventLogEntry, SimulationSnapshot, World } from '../../types/simulation'
 import type { AgentSnapshot } from '../../types/agents'
+import type { EraDirectorSnapshot } from '../era/eraTypes'
+import type { CivilizationSnapshot, SapientCladeSnapshot } from '../civilization/civTypes'
+import type { BiosphereState, ReseedState } from '../../types/runtime'
 import { AgentSoA } from '../agents/AgentSoA'
 import { buildCompactSpeciesOccupancy } from '../species/speciesOccupancy'
 import type {
@@ -49,7 +52,7 @@ export function encodeSnapshot(
       aggregateBiomass: life.aggregateBiomass,
       populationArchitecture: life.populationArchitecture,
       representationMetrics: life.representationMetrics,
-      populationUnits: life.populationUnits.slice(0, 32),
+      populationUnits: life.populationUnits.slice(0, 256),
       tileCounts: undefined,
       tileBiomass: undefined,
       organisms: undefined,
@@ -57,7 +60,10 @@ export function encodeSnapshot(
     }),
     agentsSummaryJson: JSON.stringify({
       totalAgents: agents.totalAgents,
+      populationReserve: agents.populationReserve,
+      totalMobilePopulation: agents.totalMobilePopulation,
       totalBiomass: agents.totalBiomass,
+      reserveBiomass: agents.reserveBiomass,
       grazerCount: agents.grazerCount,
       predatorCount: agents.predatorCount,
       scavengerCount: agents.scavengerCount,
@@ -71,6 +77,11 @@ export function encodeSnapshot(
     briefingJson: JSON.stringify(snapshot.briefing),
     eventsJson: JSON.stringify(snapshot.events),
     lastDeepTimeSummary: snapshot.lastDeepTimeSummary,
+    eraDirectorJson: JSON.stringify(snapshot.eraDirector ?? null),
+    sapientCladesJson: JSON.stringify(snapshot.sapientClades ?? null),
+    civilizationJson: JSON.stringify(snapshot.civilization ?? null),
+    biosphereStateJson: JSON.stringify(snapshot.biosphereState ?? 'active'),
+    reseedStateJson: JSON.stringify(snapshot.reseedState),
     recentActivityTiles: [],
     stabilityWarning: null,
   }
@@ -102,6 +113,11 @@ export function encodeSnapshot(
       briefingJson: base.briefingJson,
       eventsJson: base.eventsJson,
       lastDeepTimeSummary: base.lastDeepTimeSummary,
+      eraDirectorJson: base.eraDirectorJson,
+      sapientCladesJson: base.sapientCladesJson,
+      civilizationJson: base.civilizationJson,
+      biosphereStateJson: base.biosphereStateJson,
+      reseedStateJson: base.reseedStateJson,
       recentActivityTiles: [],
       stabilityWarning: null,
       organismsJson: JSON.stringify(life.organisms),
@@ -166,6 +182,29 @@ export function decodeSnapshot(
   const briefing = JSON.parse(payload.briefingJson) as BriefingSnapshot
   const events = JSON.parse(payload.eventsJson) as EventLogEntry[]
   const speciesOccupancy = JSON.parse(payload.speciesOccupancyJson) as LifeSnapshot['speciesOccupancy']
+  const eraDirector = payload.eraDirectorJson
+    ? (JSON.parse(payload.eraDirectorJson) as EraDirectorSnapshot | null)
+    : undefined
+  const sapientClades = payload.sapientCladesJson
+    ? (JSON.parse(payload.sapientCladesJson) as SapientCladeSnapshot | null)
+    : undefined
+  const civilization = payload.civilizationJson
+    ? (JSON.parse(payload.civilizationJson) as CivilizationSnapshot | null)
+    : undefined
+  const biosphereState = payload.biosphereStateJson
+    ? (JSON.parse(payload.biosphereStateJson) as BiosphereState)
+    : (briefing.biosphereState ?? 'active')
+  const reseedState = payload.reseedStateJson
+    ? (JSON.parse(payload.reseedStateJson) as ReseedState)
+    : (briefing.reseedState ?? {
+        lastReseedEvent: null,
+        lastReseedMode: null,
+        lastReseedTileX: null,
+        lastReseedTileY: null,
+        lastReseedTick: null,
+        lastReseedConfirmed: false,
+        lastReseedMessage: null,
+      })
 
   let organisms: LifeSnapshot['organisms'] = []
   let agentList: MobileAgent[] = []
@@ -176,6 +215,11 @@ export function decodeSnapshot(
   } else {
     agentList = JSON.parse(payload.agentMetaJson) as MobileAgent[]
     organisms = []
+    const posCount = Math.floor(payload.agentPositions.length / 2)
+    for (let i = 0; i < Math.min(agentList.length, posCount); i++) {
+      agentList[i]!.x = payload.agentPositions[i * 2]!
+      agentList[i]!.y = payload.agentPositions[i * 2 + 1]!
+    }
   }
 
   const life: LifeSnapshot = {
@@ -208,6 +252,11 @@ export function decodeSnapshot(
       recentEnded: [],
       stressTileIds: (briefing.activeDisasters ?? []).flatMap((d) => d.affectedTileIds),
     },
+    biosphereState,
+    reseedState,
+    eraDirector: eraDirector ?? undefined,
+    sapientClades: sapientClades ?? undefined,
+    civilization: civilization ?? undefined,
   }
 }
 

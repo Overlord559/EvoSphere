@@ -55,6 +55,26 @@ export interface LatestDevelopment {
   focusTileY?: number
 }
 
+export type BiosphereState =
+  | 'active'
+  | 'compressed'
+  | 'basal_only'
+  | 'mobile_extinction'
+  | 'recovering'
+  | 'true_extinction'
+
+export type MapVisibilityMode = 'yes' | 'no' | 'density-only' | 'compressed'
+
+export interface ReseedState {
+  lastReseedEvent: string | null
+  lastReseedMode: string | null
+  lastReseedTileX: number | null
+  lastReseedTileY: number | null
+  lastReseedTick: number | null
+  lastReseedConfirmed: boolean
+  lastReseedMessage: string | null
+}
+
 export interface BriefingSnapshot {
   simulatedYear: number
   estimatedGenerations: number
@@ -103,6 +123,23 @@ export interface BriefingSnapshot {
   originScenarioLabel: string | null
   /** World archetype label for UI */
   worldArchetypeLabel: string | null
+  /** v0.5.4f biosphere health — not the same as tracked organism count */
+  biosphereState: BiosphereState
+  biosphereStateLabel: string | null
+  /** Last manual/planet reseed confirmation */
+  reseedState: ReseedState | null
+  /** v0.6 era director summary */
+  eraDirectorSummary: string | null
+  /** v0.6 oxygenation headline */
+  oxygenationSummary: string | null
+  /** v0.6 background biosphere note */
+  backgroundBiosphereSummary: string | null
+  /** v0.6 sapient clade headline */
+  sapientCladeSummary: string | null
+  /** v0.6 civilization headline */
+  civilizationSummary: string | null
+  /** v0.6.1 core life growth / block headlines */
+  lifeGrowthSummary: string | null
 }
 
 export interface PopulationArchitectureBriefing {
@@ -161,6 +198,10 @@ export interface SelectedSpeciesBriefing {
   hiddenAsAggregate?: boolean
   convertedToCohort?: boolean
   populationChangeReason?: string | null
+  visibilityStatus?: import('./life').SpeciesVisibilityStatus
+  trackedRepresentatives?: number
+  populationUnitsCount?: number
+  mapVisibilityMode?: MapVisibilityMode
 }
 
 export interface SimulationSnapshot {
@@ -293,12 +334,32 @@ export interface PerformanceStats {
   /** v0.5.4e representative rendering caps */
   renderedMovingGlyphs: number
   renderedProducerGlyphs: number
+  renderedStaticMarkers: number
   visibleCohortCount: number
   skippedGlyphs: number
   densityOnlyMode: boolean
   maxMovingGlyphCap: number
   maxProducerGlyphCap: number
+  livingSpeciesMarked: number
   estimatedPopVsRenderedReps: string | null
+  /** v0.6.2 WASM kernel backend status */
+  kernelBackend?: 'ts' | 'wasm' | 'wasm-fallback'
+  /** v0.6.3 showcase soak telemetry */
+  renderPipelineDisplay?: string
+  marker3dCount?: number
+  mesh3dCount?: number
+  /** v0.6.4 engine smoothness */
+  renderMsLastFrame?: number
+  renderQualityTier?: string
+  /** Render budget bridge — candidates before sampling */
+  candidateMovingGlyphs?: number
+  candidateProducerGlyphs?: number
+  candidateStaticGlyphs?: number
+  skippedMovingGlyphs?: number
+  skippedProducerGlyphs?: number
+  skippedStaticMarkers?: number
+  showcaseAggregateTiles?: number
+  showcaseAggregateMarkers?: number
 }
 
 export interface RuntimeState {

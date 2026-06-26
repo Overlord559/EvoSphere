@@ -1,5 +1,7 @@
 import type { DeepTimeProgress, DeepTimeSummary, ThrottleStatus } from '../../types/runtime'
 import type { DisasterSettings } from '../config/disasterConfig'
+import type { EraDirectorSettings } from '../era/eraTypes'
+import type { EraPresetDefinition } from '../../ui/showcase/eraPresets'
 import type { SimulationSettings, SimulationSnapshot } from '../../types/simulation'
 import type { SimSpeed } from '../../types/runtime'
 import type { PerformanceReport } from '../engine/performanceProfiler'
@@ -49,6 +51,12 @@ export interface CompactRenderPayload {
   lastDeepTimeSummary: DeepTimeSummary | null
   recentActivityTiles: number[]
   stabilityWarning: string | null
+  /** v0.6.1b — compact era/civ parity for worker UI panels */
+  eraDirectorJson?: string
+  sapientCladesJson?: string
+  civilizationJson?: string
+  biosphereStateJson?: string
+  reseedStateJson?: string
 }
 
 export interface CompactInspectorPayload {
@@ -73,6 +81,11 @@ export interface CompactInspectorPayload {
   stabilityWarning: string | null
   organismsJson: string
   agentsFullJson: string
+  eraDirectorJson?: string
+  sapientCladesJson?: string
+  civilizationJson?: string
+  biosphereStateJson?: string
+  reseedStateJson?: string
 }
 
 export type CompactSnapshotPayload = CompactRenderPayload | CompactInspectorPayload
@@ -92,6 +105,8 @@ export type MainToWorkerMessage =
   | { type: 'injectDisaster'; disasterType: string; severityValue: number }
   | { type: 'injectRandomDisaster' }
   | { type: 'setDisasterSettings'; settings: Partial<DisasterSettings> }
+  | { type: 'setEraDirectorSettings'; settings: Partial<EraDirectorSettings> }
+  | { type: 'applyEraPreset'; preset: EraPresetDefinition }
   | { type: 'shutdown' }
   | { type: 'snapshotConsumed' }
 

@@ -30,6 +30,8 @@ import {
   renderBudgetMetrics,
   type RenderBudgetMetrics,
 } from './renderBudget'
+import { drawReseedEffects, type ReseedVisualEffect } from './reseedEffects'
+import { drawShowcaseAggregateOverlay } from './showcaseAggregateOverlay'
 
 export type VisualMode = 'organic' | 'debug'
 
@@ -59,6 +61,17 @@ export interface OrganismRenderContext {
   redrawMode?: RedrawMode
   renderOverload?: boolean
   debugRenderOverride?: boolean
+  heightShading?: boolean
+  species?: import('../../types/life').SpeciesRecord[]
+  recentlyReseededSpeciesIds?: string[]
+  recentlyReseededTileIndices?: number[]
+  reseedVisualEffects?: ReseedVisualEffect[]
+  reseedVisualNowMs?: number
+  qualityTier?: import('./renderQualityTier').RenderQualityTier
+  /** Showcase / arcade / screenshot — always draw aggregate life overlays. */
+  showcaseAggregateMode?: boolean
+  showcaseEraLabel?: string
+  showcaseSnapshot?: import('../../types/simulation').SimulationSnapshot
 }
 
 export interface RenderStats {
@@ -127,6 +140,7 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
     selectedSpeciesId,
     selectedTile,
     viewBounds,
+    heightShading,
   } = ctx
 
   const selectedTileIndex =
@@ -139,10 +153,14 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
       agents,
       organisms,
       populationUnits: ctx.populationUnits,
+      species: ctx.species,
       selectedSpeciesId,
       selectedTileIndex,
+      recentlyReseededSpeciesIds: ctx.recentlyReseededSpeciesIds,
+      recentlyReseededTileIndices: ctx.recentlyReseededTileIndices,
       debugOverride: ctx.debugRenderOverride,
       overload: ctx.renderOverload,
+      qualityTier: ctx.qualityTier,
     },
     world.width,
   )
@@ -185,18 +203,24 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
           : undefined
 
         if (visualMode === 'organic') {
-          drawOrganicTile(terrainG, tile, tileSize, overlay, colorContext, animTimeMs, simTick)
+          drawOrganicTile(terrainG, tile, tileSize, overlay, colorContext, animTimeMs, simTick, heightShading)
         } else {
           drawTile(terrainG, tile, tileSize, overlay, colorContext)
         }
         drawnTiles += 1
 
-        if (densityOnly && overlay !== 'life' && overlay !== 'biomass') continue
+        if (densityOnly && overlay !== 'life' && overlay !== 'biomass' && !ctx.showcaseAggregateMode) continue
 
         const tileOrgs = orgByTile.get(idx)
         const hasProducerUnit = budget.producerUnitsToDraw.some((u) => u.tileIndex === idx)
+        const hasStaticMarker = budget.staticMarkersToDraw.some((u) => u.tileIndex === idx)
+        const hasDensityOverlay = budget.densityOverlayUnits.some((u) => u.tileIndex === idx)
         if (
-          (tileOrgs && tileOrgs.length > 0) || hasProducerUnit || (tileCounts[idx] ?? 0) > 0.5
+          (tileOrgs && tileOrgs.length > 0) ||
+          hasProducerUnit ||
+          hasStaticMarker ||
+          hasDensityOverlay ||
+          (tileCounts[idx] ?? 0) > 0.5
         ) {
           if (visualMode === 'organic' && drawnPlantTiles < MAX_PLANT_GLYPH_TILES) {
             if (tileOrgs && tileOrgs.length > 0) {
@@ -228,6 +252,27 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
                     isSelectedSpecies: unit.speciesId === selectedSpeciesId,
                     densityOnly,
                     animateFully: budget.animateFully,
+                  },
+                )
+              }
+            } else if (hasStaticMarker || hasDensityOverlay) {
+              const unit =
+                budget.staticMarkersToDraw.find((u) => u.tileIndex === idx) ??
+                budget.densityOverlayUnits.find((u) => u.tileIndex === idx)
+              if (unit) {
+                drawCohortGlyph(
+                  plantsG,
+                  unit,
+                  -1,
+                  -1,
+                  tileSize,
+                  world.width,
+                  {
+                    phaseMs: animTimeMs,
+                    moving: false,
+                    isSelectedSpecies: unit.speciesId === selectedSpeciesId,
+                    densityOnly: true,
+                    animateFully: false,
                   },
                 )
               }
@@ -291,6 +336,23 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
       animateFully: budget.animateFully,
     })
     drawnCohortGlyphs += 1
+  }
+
+  for (const unit of budget.staticMarkersToDraw) {
+    if (!tileIndexInBounds(unit.tileIndex, world.width, viewBounds)) continue
+    if (budget.cohortUnitsToDraw.includes(unit) || budget.producerUnitsToDraw.includes(unit)) continue
+    drawCohortGlyph(agentsG, unit, -1, -1, tileSize, world.width, {
+      phaseMs: animTimeMs,
+      moving: false,
+      isSelectedSpecies: unit.speciesId === selectedSpeciesId,
+      densityOnly: densityOnly || unit.representedIndividuals > 500,
+      animateFully: false,
+    })
+    drawnCohortGlyphs += 1
+  }
+
+  if (ctx.reseedVisualEffects && ctx.reseedVisualEffects.length > 0) {
+    drawReseedEffects(agentsG, ctx.reseedVisualEffects, tileSize, ctx.reseedVisualNowMs ?? animTimeMs)
   }
 
   for (const agent of budget.agentsToDraw) {
@@ -371,6 +433,21 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
     outline.stroke({ width: 2, color: 0x22d3ee, alpha: 0.95 })
   }
 
+  let showcaseAggregateTiles = 0
+  let showcaseAggregateMarkers = 0
+  if (ctx.showcaseAggregateMode && ctx.showcaseSnapshot) {
+    const agg = drawShowcaseAggregateOverlay(layers.graphics.activity, {
+      snapshot: ctx.showcaseSnapshot,
+      viewBounds,
+      tileSize,
+      zoom,
+      animTimeMs,
+      eraLabel: ctx.showcaseEraLabel,
+    })
+    showcaseAggregateTiles = agg.microbialTiles
+    showcaseAggregateMarkers = agg.producerMarkers + agg.mobileMarkers + agg.settlementMarkers
+  }
+
   return {
     drawnTiles,
     drawnAgents: budget.agentsToDraw.length,
@@ -378,6 +455,10 @@ export function renderWorld(layers: RenderLayers, ctx: OrganismRenderContext): R
     drawnCohortGlyphs,
     lodLevel: detail,
     terrainRedrawn: !skipTerrain,
-    renderBudget: metrics,
+    renderBudget: {
+      ...metrics,
+      showcaseAggregateTiles,
+      showcaseAggregateMarkers,
+    },
   }
 }

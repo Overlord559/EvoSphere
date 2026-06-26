@@ -49,9 +49,15 @@ import {
   noteTerrainRedraw,
 } from "./renderCache";
 
-import { registerViewportRaf, unregisterViewportRaf } from "./lifecycleGuards";
+import { registerViewportRaf, unregisterViewportRaf, countActiveRafLoops } from "./lifecycleGuards";
+import { autoAdjustQualityTier } from "./renderQualityTier";
+import {
+  processSimulationFrame,
+  setViewportDrivesSimulation,
+} from "../../store/simulationStore";
 
 import { SoakDebugHUD } from "../panels/SoakDebugHUD";
+import { resolveCameraPreset2D } from "../showcase/cameraPresets";
 const BASE_TILE_SIZE = 6;
 
 const DRAG_THRESHOLD = 4;
@@ -62,7 +68,8 @@ interface ViewportState {
 
   zoom: number;
 }
-export function WorldViewport() {
+export function WorldViewport({ pipelineMode = '2.5d' }: { pipelineMode?: 'classic2d' | '2.5d' | '3d' }) {
+  const heightShading = pipelineMode === '2.5d'
   const containerRef = useRef<HTMLDivElement>(null);
 
   const appRef = useRef<Application | null>(null);
@@ -80,6 +87,9 @@ export function WorldViewport() {
   const lastTerrainWorldIdRef = useRef<string | null>(null);
 
   const terrainRedrawCountRef = useRef(0);
+  const qualityBadFramesRef = useRef(0);
+  const qualityGoodFramesRef = useRef(0);
+  const lastQualityAdjustMsRef = useRef(0);
   const overlayMode = useSimulationStore((s) => s.overlayMode);
 
   const visualMode = useSimulationStore((s) => s.visualMode);
@@ -143,6 +153,11 @@ export function WorldViewport() {
   const cameraZoomOutSeq = useSimulationStore((s) => s.cameraZoomOutSeq);
 
   const cameraFitPlanetSeq = useSimulationStore((s) => s.cameraFitPlanetSeq);
+  const screenshotMode = useSimulationStore((s) => s.screenshotMode);
+  const uiHidden = useSimulationStore((s) => s.uiHidden);
+  const soakHudExpanded = useSimulationStore((s) => s.soakHudExpanded);
+  const renderPipeline = useSimulationStore((s) => s.renderPipeline);
+  const setRenderQualityTier = useSimulationStore((s) => s.setRenderQualityTier);
   const world = snapshot.world;
 
   const speciesTileIndices = selectedSpeciesId
@@ -280,31 +295,72 @@ export function WorldViewport() {
         state.runtime.speed === 'ultrafast',
 
       debugRenderOverride: state.visualMode === 'debug',
+      heightShading,
+      species: state.snapshot.life.species,
+      recentlyReseededSpeciesIds: state.recentlyReseededSpeciesIds,
+      recentlyReseededTileIndices: state.recentlyReseededTileIndices,
+      reseedVisualEffects: state.reseedVisualEffects,
+      reseedVisualNowMs: state.animTimeMs,
+      qualityTier: state.renderQualityTier,
+      showcaseAggregateMode: state.showcaseMode || state.arcadeEvolutionMode || state.screenshotMode,
+      showcaseSnapshot: state.snapshot,
+      showcaseEraLabel: state.snapshot.briefing.era ?? state.snapshot.eraDirector?.focusLayer ?? undefined,
     });
     if (stats.terrainRedrawn) {
       terrainRedrawCountRef.current += 1;
 
       noteTerrainRedraw(state.snapshot.worldId, state.overlayMode);
     }
+    const renderMs = performance.now() - renderStart;
+
+    globalProfiler.recordRenderMs(renderMs);
+
+    const nowMs = performance.now();
+    if (nowMs - lastQualityAdjustMsRef.current >= 500) {
+      lastQualityAdjustMsRef.current = nowMs;
+      const adjusted = autoAdjustQualityTier(
+        renderMs,
+        state.renderQualityTier,
+        16.67,
+        qualityBadFramesRef.current,
+        qualityGoodFramesRef.current,
+      );
+      qualityBadFramesRef.current = adjusted.badFrames;
+      qualityGoodFramesRef.current = adjusted.goodFrames;
+      if (adjusted.tier !== state.renderQualityTier) {
+        setRenderQualityTier(adjusted.tier);
+      }
+    }
+
     const pixiCount = countPixiGraphics(layers.root);
 
     const containerCount = countPixiContainers(layers.root);
-
-    globalProfiler.recordRenderMs(performance.now() - renderStart);
 
     globalProfiler.setPixiObjectEstimate(pixiCount);
 
     updatePerformanceStats({
       ...stats,
+      renderMsLastFrame: renderMs,
+      renderQualityTier: stats.renderBudget.qualityTier ?? state.renderQualityTier,
 
       renderedMovingGlyphs: stats.renderBudget.renderedMovingGlyphs,
       renderedProducerGlyphs: stats.renderBudget.renderedProducerGlyphs,
       visibleCohortCount: stats.renderBudget.visibleCohortCount,
       skippedGlyphs: stats.renderBudget.skippedGlyphs,
+      skippedMovingGlyphs: stats.renderBudget.skippedMovingGlyphs,
+      skippedProducerGlyphs: stats.renderBudget.skippedProducerGlyphs,
+      skippedStaticMarkers: stats.renderBudget.skippedStaticMarkers,
+      candidateMovingGlyphs: stats.renderBudget.candidateMovingGlyphs,
+      candidateProducerGlyphs: stats.renderBudget.candidateProducerGlyphs,
+      candidateStaticGlyphs: stats.renderBudget.candidateStaticGlyphs,
       densityOnlyMode: stats.renderBudget.densityOnlyMode,
       maxMovingGlyphCap: stats.renderBudget.maxMovingCap,
       maxProducerGlyphCap: stats.renderBudget.maxProducerCap,
-      estimatedPopVsRenderedReps: `${state.snapshot.life.totalBiologicalPopulation + state.snapshot.agents.totalMobilePopulation} est / ${stats.renderBudget.renderedMovingGlyphs} drawn`,
+      renderedStaticMarkers: stats.renderBudget.renderedStaticMarkers,
+      livingSpeciesMarked: stats.renderBudget.livingSpeciesMarked,
+      showcaseAggregateTiles: stats.renderBudget.showcaseAggregateTiles,
+      showcaseAggregateMarkers: stats.renderBudget.showcaseAggregateMarkers,
+      estimatedPopVsRenderedReps: `${state.snapshot.life.totalBiologicalPopulation + state.snapshot.agents.totalMobilePopulation} est / ${stats.renderBudget.renderedMovingGlyphs} moving + ${stats.renderBudget.renderedStaticMarkers} static`,
 
       pixiGraphicsCount: pixiCount,
 
@@ -317,6 +373,8 @@ export function WorldViewport() {
       glyphCacheSize: getGlyphCacheSize(),
 
       terrainRedrawCount: terrainRedrawCountRef.current,
+      renderPipelineDisplay: renderPipeline,
+      rafLoopCount: countActiveRafLoops(),
 
       heapEstimateMb: readHeapEstimateMb(),
 
@@ -338,7 +396,12 @@ export function WorldViewport() {
 
     let lastAnimMs = performance.now();
 
-    registerViewportRaf();
+    unregisterViewportRaf()
+    const rafOk = registerViewportRaf();
+    if (!rafOk) {
+      console.warn("[WorldViewport] duplicate viewport RAF blocked — stale loop may exist");
+    }
+    setViewportDrivesSimulation(true);
     const run = async () => {
       app = new Application();
 
@@ -384,6 +447,8 @@ export function WorldViewport() {
       observer.observe(host);
       const animLoop = (now: number) => {
         if (destroyed) return;
+
+        processSimulationFrame();
 
         const delta = now - lastAnimMs;
 
@@ -542,14 +607,56 @@ export function WorldViewport() {
       window.addEventListener("keydown", onKeyDown);
       redrawRef.current();
 
-      applyCamera(
-        fitPlanetToViewport(
-          world,
+      const bootState = useSimulationStore.getState();
+      if (bootState.cameraFocusRequest) {
+        const req = bootState.cameraFocusRequest;
+        const zoom = req.zoom ?? CAMERA_INSPECT_ZOOM;
+        const focus = cameraFocusOnTile(
+          req.tileX,
+          req.tileY,
           BASE_TILE_SIZE,
           host.clientWidth,
           host.clientHeight,
-        ),
-      );
+          clampZoom(zoom),
+        );
+        applyCamera({ panX: focus.panX, panY: focus.panY, zoom: clampZoom(zoom) });
+        bootState.clearCameraFocusRequest();
+      } else if (bootState.showcaseMode || bootState.arcadeEvolutionMode || bootState.screenshotMode) {
+        const resolved = resolveCameraPreset2D(
+          bootState.snapshot,
+          bootState.showcaseCameraPreset,
+        );
+        if (resolved.fitPlanet) {
+          applyCamera(
+            fitPlanetToViewport(
+              world,
+              BASE_TILE_SIZE,
+              host.clientWidth,
+              host.clientHeight,
+            ),
+          );
+        } else if (resolved.tileX != null && resolved.tileY != null) {
+          const zoom = resolved.zoom ?? CAMERA_INSPECT_ZOOM;
+          const focus = cameraFocusOnTile(
+            resolved.tileX,
+            resolved.tileY,
+            BASE_TILE_SIZE,
+            host.clientWidth,
+            host.clientHeight,
+            clampZoom(zoom),
+          );
+          applyCamera({ panX: focus.panX, panY: focus.panY, zoom: clampZoom(zoom) });
+        }
+      } else {
+        applyCamera(
+          fitPlanetToViewport(
+            world,
+            BASE_TILE_SIZE,
+            host.clientWidth,
+            host.clientHeight,
+          ),
+        );
+      }
       cleanupListeners = () => {
         cancelAnimationFrame(animFrameId);
 
@@ -574,6 +681,7 @@ export function WorldViewport() {
     return () => {
       destroyed = true;
 
+      setViewportDrivesSimulation(false);
       unregisterViewportRaf();
 
       cleanupListeners?.();
@@ -693,8 +801,10 @@ export function WorldViewport() {
     runtime.cameraMode !== "free" ||
     runtime.followSelectedSpecies ||
     selectedTile !== null;
+  const hideViewportChrome = screenshotMode || uiHidden;
   return (
-    <div className="flex min-h-[320px] flex-1 flex-col rounded-lg border border-command-border bg-command-surface/60">
+    <div className={`flex min-h-[320px] flex-1 flex-col ${hideViewportChrome ? '' : 'rounded-lg border border-command-border bg-command-surface/60'}`}>
+      {!hideViewportChrome && (
       <div className="flex flex-wrap items-center gap-1 border-b border-command-border p-2">
         <span className="mr-2 font-mono text-xs text-slate-500">OVERLAY</span>
 
@@ -800,23 +910,34 @@ export function WorldViewport() {
           </span>
         )}
       </div>
+      )}
 
       <div
         ref={containerRef}
-        className="relative min-h-[280px] flex-1 overflow-hidden"
+        className={`relative min-h-[280px] flex-1 overflow-hidden ${heightShading ? 'evosphere-atmosphere' : ''}`}
         aria-label="World viewport"
       />
 
+      {!hideViewportChrome && (
       <div className="border-t border-command-border p-2">
         <SoakDebugHUD />
       </div>
+      )}
 
+      {hideViewportChrome && soakHudExpanded && (
+        <div className="absolute bottom-2 left-2 right-2 z-10 max-h-40 overflow-auto rounded border border-slate-700/60 bg-slate-950/90 p-2">
+          <SoakDebugHUD />
+        </div>
+      )}
+
+      {!hideViewportChrome && (
       <p className="border-t border-command-border px-3 py-2 font-mono text-xs text-slate-500">
         Circular planet — scroll to zoom · drag to pan · ESC exits focus · click
         tile or agent to inspect
       </p>
+      )}
 
-      <style>{`.cam-btn { border-radius: 0.25rem; border: 1px solid rgb(34 211 238 / 0.25); padding: 0.125rem 0.5rem; font-family: ui-monospace, monospace; font-size: 10px; color: rgb(103 232 249); } .cam-btn:hover { background: rgb(34 211 238 / 0.08); }`}</style>
+      <style>{`.cam-btn { border-radius: 0.25rem; border: 1px solid rgb(34 211 238 / 0.25); padding: 0.125rem 0.5rem; font-family: ui-monospace, monospace; font-size: 10px; color: rgb(103 232 249); } .cam-btn:hover { background: rgb(34 211 238 / 0.08); } .evosphere-atmosphere { box-shadow: inset 0 0 120px rgba(8, 20, 40, 0.45); }`}</style>
     </div>
   );
 }

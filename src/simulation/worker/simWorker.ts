@@ -12,6 +12,7 @@ import { tickToYears, yearsToTicks } from '../engine/simTime'
 import type { SimSpeed, ThrottleStatus, DeepTimeProgress } from '../../types/runtime'
 import { encodeSnapshot, worldToJson } from './snapshotCodec'
 import { isWorkerMessage, workerErrorMessage } from './workerProtocol'
+import { applyEraPresetToEngine } from '../era/eraPresetSeeder'
 import type {
   MainToWorkerMessage,
   WorkerPerformanceMetrics,
@@ -107,7 +108,8 @@ function postSnapshot(mode: SnapshotMode, recentActivity: number[]): void {
   const eng = requireEngine()
   const fullBriefing = mode !== 'render' || WORKER_SPEED_SCHEDULE[speed as Exclude<SimSpeed, 'deep'>]?.fullBriefingEverySnapshot !== false
   const includeOrganisms = mode === 'inspector' || mode === 'full'
-  const includeAgents = mode !== 'render' || speed === 'normal' || speed === 'fast'
+  // Always include agent positions/counts — HUD + glyph parity at ultrafast showcase speeds.
+  const includeAgents = true
 
   const snapshot = globalProfiler.time('snapshotBuild', () =>
     eng.getSnapshotWithSelectedSpecies(selectedSpeciesId, {
@@ -356,6 +358,22 @@ self.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
         const eng = requireEngine()
         eng.getDisasterSystem().setSettings(msg.settings)
         postSnapshot('render', eng.getRecentActivityTileIndices())
+        break
+      }
+
+      case 'setEraDirectorSettings': {
+        const eng = requireEngine()
+        eng.getEraDirector().setSettings(msg.settings)
+        if (msg.settings.speculativeSapientsEnabled != null) {
+          eng.getCivilizationSystem().setSpeculativeEnabled(msg.settings.speculativeSapientsEnabled)
+        }
+        break
+      }
+
+      case 'applyEraPreset': {
+        const eng = requireEngine()
+        applyEraPresetToEngine(eng, msg.preset, (type, message) => eng.logEvent(type, message))
+        postSnapshot('inspector', eng.getRecentActivityTileIndices())
         break
       }
 
